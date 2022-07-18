@@ -39,10 +39,11 @@ void thermal_camera_check_eeprom_errors(){
     }
 
     digitalWrite(LED_PIN, HIGH);
+    MLX90641_ExtractParameters(MLX_eeprom, &thermal_camera_params);
 }
 
 void thermal_camera_read_data(float read_data[]){
-    uint16_t mlx90640Frame[834];
+    uint16_t mlx90640Frame[300];
     int status = MLX90641_GetFrameData(THERMAL_CAMERA_I2C_ADDRESS, mlx90640Frame);
     float vdd = MLX90641_GetVdd(mlx90640Frame, &thermal_camera_params);
     float Ta = MLX90641_GetTa(mlx90640Frame, &thermal_camera_params);

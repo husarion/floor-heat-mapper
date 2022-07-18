@@ -12,25 +12,30 @@ rcl_allocator_t allocator;
 rcl_node_t node;
 rcl_timer_t timer;
 
-uint16_t image_data_ros[IMAGE_HEIGHT * IMAGE_WIDTH];
 float image_data_temperature[IMAGE_HEIGHT * IMAGE_WIDTH];
-uint16_t info_buffer[BUFFER_LENGHT];
+uint8_t image_data_ros[IMAGE_HEIGHT * IMAGE_WIDTH];
+extern void setup();
+extern int main();
 
 void error_loop() {
     while (true) {
         digitalWrite(LED_PIN, !digitalRead(LED_PIN));
         delay(100);
+        if (rmw_uros_ping_agent(100, 1) == RCL_RET_OK) {
+            setup();
+            while (true) {
+                main();
+            }
+        }
     }
 }
 
 void timer_callback(rcl_timer_t* timer, int64_t last_call_time) {
     RCLC_UNUSED(last_call_time);
     if (timer != NULL) {
-        digitalWrite(LED_PIN, !digitalRead(LED_PIN));
-
+        thermal_camera_read_data(image_data_temperature);
+        fill_image_msg_with_thermal_camera();
         RCSOFTCHECK(rcl_publish(&image_pub, &image_msg, NULL));
-
-        // thermal_camera_read_data(image_data_temperature);
     }
 }
 
@@ -54,10 +59,8 @@ void micro_ros_deinit() {
 }
 
 void micro_ros_spin() {
-    while (true) {
-        delay(100);
-        RCSOFTCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(100)));
-    }
+    delay(100);
+    RCSOFTCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(100)));
 }
 
 void serial_init() {
@@ -99,20 +102,58 @@ void fill_image_msg_constants() {
     image_msg.header.frame_id.data = (char*)THERMAL_CAMERA_FRAME_NAME;
     image_msg.width = IMAGE_WIDTH;
     image_msg.height = IMAGE_HEIGHT;
-    image_msg.encoding.data = "mono16";
+    image_msg.encoding.data = (char*)"mono8";
     image_msg.is_bigendian = false;
-    image_msg.step = 32;  // TODO: co to?
-    image_msg.data.capacity = IMAGE_WIDTH * IMAGE_HEIGHT;
-    // image_msg.data.data = (uint8_t*)image_data_ros;
-    // image_msg.data.size = sizeof(image_data_ros);
+    image_msg.step = IMAGE_WIDTH;
+    image_msg.data.data = (uint8_t*)image_data_ros;
+    image_msg.data.size = sizeof(image_data_ros);
 }
 
-void convert_temperatures_to_image_msg() {
+void fill_image_msg_with_thermal_camera() {
+    struct timespec currnet_timestamp = get_time_stamp();
+    image_msg.header.stamp.nanosec = currnet_timestamp.tv_nsec;
+    image_msg.header.stamp.sec = currnet_timestamp.tv_sec;
+    mirror_thermal_image();
+    filter_nan_values();
     for (uint8_t i = 0; i < IMAGE_HEIGHT * IMAGE_WIDTH; ++i) {
-        if (image_data_temperature[(int(i / 16) * 16 + 15) - (i - int(i / 16) * 16)] < 0) {
-            image_data_ros[int(i / 16) * 32 + i] = 0;
-        } else {
-            image_data_ros[int(i / 16) * 32 + i] = (uint16_t)(image_data_temperature[(int(i / 16) * 16 + 15) - (i - int(i / 16) * 16)] * 100);  // magic
+        if (image_data_temperature[i] < 0.0) {
+            image_data_temperature[i] = 0.0;
+        }
+        image_data_ros[i] = image_data_temperature[i] * 3;
+    }
+}
+
+timespec get_time_stamp() {
+    struct timespec currnet_timestamp = {0};
+    RCSOFTCHECK(rmw_uros_sync_session(1000));
+    if (rmw_uros_epoch_synchronized()) {
+        currnet_timestamp.tv_sec = rmw_uros_epoch_millis() / 1000;
+        currnet_timestamp.tv_nsec = rmw_uros_epoch_nanos();
+    }
+    return currnet_timestamp;
+}
+
+void mirror_thermal_image() {
+    for (int i = 0; i < IMAGE_HEIGHT / 2; ++i) {
+        for (int j = 0; j < IMAGE_WIDTH; ++j) {
+            auto saved_value = image_data_temperature[j + i * IMAGE_WIDTH];
+            image_data_temperature[j + i * IMAGE_WIDTH] = image_data_temperature[j + ((IMAGE_HEIGHT - 1 - i) * IMAGE_WIDTH)];
+            image_data_temperature[j + ((IMAGE_HEIGHT - 1 - i) * IMAGE_WIDTH)] = saved_value;
+        }
+    }
+}
+
+// todo: figure out why sensor puts nan in one static value
+void filter_nan_values() {
+    for (uint8_t i = 0; i < IMAGE_HEIGHT * IMAGE_WIDTH; ++i) {
+        if (image_data_temperature[i] != image_data_temperature[i]) {
+            if (i != 0 or i != IMAGE_HEIGHT * IMAGE_WIDTH - 1) {
+                image_data_temperature[i] = (image_data_temperature[i - 1] + image_data_temperature[i - 1]) / 2;
+            } else if (i == 0) {
+                image_data_temperature[i] = image_data_temperature[i + 1];
+            } else if (i == IMAGE_HEIGHT * IMAGE_WIDTH - 1) {
+                image_data_temperature[i] = image_data_temperature[i - 1];
+            }
         }
     }
 }

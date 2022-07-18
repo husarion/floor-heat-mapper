@@ -32,6 +32,7 @@
 constexpr char NODE_NAME[] = "Thermal_Camera";
 constexpr char PUBLISHER_NAME[] = "thermal_camera";
 
+
 constexpr char THERMAL_CAMERA_FRAME_NAME[] = "thermal_camera_frame";
 constexpr uint8_t BUFFER_LENGHT = 10;
 constexpr uint8_t IMAGE_WIDTH = 16;
@@ -51,4 +52,8 @@ void node_init();
 void publishers_init();
 void timer_init();
 
+void fill_image_msg_with_thermal_camera();
 void fill_image_msg_constants();
+void mirror_thermal_image();
+void filter_nan_values();
+timespec get_time_stamp();

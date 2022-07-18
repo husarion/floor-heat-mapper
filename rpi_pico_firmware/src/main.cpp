@@ -3,7 +3,7 @@
 
 void setup() {
     led_init();
-    // thermal_camera_init();
+    thermal_camera_init();
     micro_ros_init();
 }
 
