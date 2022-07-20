@@ -16,7 +16,7 @@ find_package(tf2_geometry_msgs REQUIRED)
 
 
 add_executable(${PROJECT_NAME}
-  src/map_publisher.cpp
+  src/heatmap_publisher.cpp
   src/main.cpp
  )
 

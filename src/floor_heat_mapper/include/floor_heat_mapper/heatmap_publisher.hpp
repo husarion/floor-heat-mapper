@@ -19,11 +19,13 @@
 namespace floor_heat_mapper {
 
 constexpr char NODE_NAME[] = "Map_Publisher";
-constexpr char MAP_TOPIC_NAME[] = "floor_heatmap";
+constexpr char HEATMAP_TOPIC_NAME[] = "floor_heatmap";
+constexpr char MAP_TOPIC_NAME[] = "map";
+
 constexpr char MAP_FRAME_NAME[] = "map";
 constexpr char ODOM_FRAME_NAME[] = "odom";
 constexpr char BASE_LINK_FRAME_NAME[] = "base_link";
-
+constexpr char HEATMAP_OFFSET_FRAME_NAME[] = "heatmap_offset";
 constexpr char HEATMAP_FRAME_NAME[] = "floor_heatmap_frame";
 constexpr char THERMAL_CAMERA_FRAME_NAME[] = "thermal_camera_frame";
 
@@ -36,16 +38,20 @@ constexpr float THERMAL_CAMERA_FRAME_Z = 0.178;
 constexpr uint8_t IMAGE_WIDTH = 16;
 constexpr uint8_t IMAGE_HEIGHT = 8;
 
-class MapPublisher : public rclcpp::Node {
+class HeatmapPublisher : public rclcpp::Node {
    public:
-    MapPublisher();
+    HeatmapPublisher();
 
    private:
-    void initialize_heatmap_origin_from_base_link();
     void create_heatmap_to_map_tf();
     void create_thermal_camera_to_base_link_tf();
-    void create_heatmap_settings();
-    void timer_callback();
+    void create_heatmap_origin_to_thermal_camera_tf();
+    void calculate_heatmap_resolution();
+    void update_heatmap();
+    void map_callback(const nav_msgs::msg::OccupancyGrid map_msg);
+    void sync_heatmap_info_with_map(const nav_msgs::msg::OccupancyGrid map_msg);
+
+    geometry_msgs::msg::Quaternion rotate_z_axis_by_angle(geometry_msgs::msg::Quaternion quaternion, double angle);
 
     rclcpp::TimerBase::SharedPtr timer_;
     nav_msgs::msg::OccupancyGrid heatmap_msg_;
@@ -56,6 +62,8 @@ class MapPublisher : public rclcpp::Node {
 
 
     rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr heatmap_pub_;
+    rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
+
     std::shared_ptr<tf2_ros::StaticTransformBroadcaster> static_tf_pub_;
 };
 }  // namespace floor_heat_mapper
