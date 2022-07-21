@@ -55,9 +55,8 @@ services:
     command: >
       roslaunch --wait rosbot_bringup rosbot_docker.launch
 
-  micro-ros-agent:
-    network_mode: service:husarnet-rosbot
-    image: microros/micro-ros-agent:humble
-    command: serial --dev /dev/ttyACM0 -v6
-    devices:
-      - /dev/ttyACM0
+  # micro-ros-agent:
+  #   image: microros/micro-ros-agent:humble
+  #   command: serial --dev /dev/ttyACM0 # -v6
+  #   devices:
+  #     - /dev/ttyACM0

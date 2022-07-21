@@ -31,6 +31,12 @@ services:
     environment:
       - FASTRTPS_DEFAULT_PROFILES_FILE=/dds-config.xml
 
+  # micro-ros-agent:
+  #   network_mode: service:husarnet-rosbot
+  #   volumes:
+  #     - ./secret/dds-config.xml:/dds-config.xml
+  #   environment:
+  #     - FASTRTPS_DEFAULT_PROFILES_FILE=/dds-config.xml
 
   husarnet-rosbot:
     image: husarnet/husarnet
@@ -46,8 +52,3 @@ services:
     environment:
       - HOSTNAME=rosbot
       - JOINCODE
-
-networks:
-  default:
-    name: net_rviz
-    driver: bridge
