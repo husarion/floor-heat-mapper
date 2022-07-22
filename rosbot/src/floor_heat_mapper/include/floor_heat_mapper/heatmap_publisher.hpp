@@ -57,12 +57,16 @@ class HeatmapPublisher : public rclcpp::Node {
     void sync_heatmap_info_with_map(const nav_msgs::msg::OccupancyGrid map_msg);
     void timer_callback();
     void take_heatmap_offset_to_map_transform();
+    void copy_and_change_to_percentages_thermal_image(const sensor_msgs::msg::Image image_msg);
+    cv::Mat create_image_from_heatmap();
+    cv::Mat rotate_image(cv::Mat image);
+    cv::Mat create_mask(cv::Mat image);
 
     geometry_msgs::msg::Quaternion rotate_z_axis_by_angle(geometry_msgs::msg::Quaternion quaternion, double angle);
 
     rclcpp::TimerBase::SharedPtr timer_;
     nav_msgs::msg::OccupancyGrid heatmap_msg_;
-    geometry_msgs::msg::TransformStamped thermal_camera_to_map_transform_;
+    geometry_msgs::msg::TransformStamped thermal_camera_image_offset_to_map_transform_;
 
     std::shared_ptr<tf2_ros::TransformListener> transform_listener_{nullptr};
     std::unique_ptr<tf2_ros::Buffer> tf_buffer_;

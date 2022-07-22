@@ -63,12 +63,12 @@ void HeatmapPublisher::timer_callback() {
 
 void HeatmapPublisher::take_heatmap_offset_to_map_transform() {
     try {
-        thermal_camera_to_map_transform_ = tf_buffer_->lookupTransform(
-            HEATMAP_OFFSET_FRAME_NAME, HEATMAP_FRAME_NAME,
+        thermal_camera_image_offset_to_map_transform_ = tf_buffer_->lookupTransform(
+            HEATMAP_FRAME_NAME, HEATMAP_OFFSET_FRAME_NAME,
             tf2::TimePointZero);
     } catch (tf2::TransformException& ex) {
-        RCLCPP_INFO(get_logger(), "Could not transform %s to %s: %s",
-                    MAP_FRAME_NAME, THERMAL_CAMERA_FRAME_NAME, ex.what());
+        // RCLCPP_INFO(get_logger(), "Could not transform %s to %s: %s",
+        //             MAP_FRAME_NAME, TH, ex.what());
         return;
     }
 }
@@ -93,48 +93,108 @@ void HeatmapPublisher::map_callback(const nav_msgs::msg::OccupancyGrid map_msg) 
 }
 
 void HeatmapPublisher::sync_heatmap_info_with_map(const nav_msgs::msg::OccupancyGrid map_msg) {
+    RCLCPP_INFO(get_logger(), "Sync map info");
     double real_size_x = map_msg.info.width * map_msg.info.resolution;
     double real_size_y = map_msg.info.height * map_msg.info.resolution;
     RCLCPP_INFO(get_logger(), "Map size x: %lf, y:%lf", real_size_x, real_size_y);
-    auto old_heatmap_x  = heatmap_msg_.info.width;
+    auto old_heatmap_x = heatmap_msg_.info.width;
     auto old_heatmap_y = heatmap_msg_.info.height;
 
     heatmap_msg_.info.width = (real_size_x / heatmap_msg_.info.resolution);
     heatmap_msg_.info.height = (real_size_y / heatmap_msg_.info.resolution);
     heatmap_msg_.info.origin = map_msg.info.origin;
-    heatmap_msg_.data.resize(heatmap_msg_.info.width * heatmap_msg_.info.height);
 
-    for (auto i = old_heatmap_x * old_heatmap_y; i < heatmap_msg_.info.width * heatmap_msg_.info.height; ++i){
-        heatmap_msg_.data[i] = -1;
+    if (old_heatmap_x * old_heatmap_y != heatmap_msg_.info.width * heatmap_msg_.info.height) {
+        RCLCPP_INFO(get_logger(), "Resizeing map...");
+        heatmap_msg_.data.resize(heatmap_msg_.info.width * heatmap_msg_.info.height);
+        for (auto i = old_heatmap_x * old_heatmap_y; i < heatmap_msg_.info.width * heatmap_msg_.info.height; ++i) {
+            heatmap_msg_.data[i] = -1;
+        }
     }
 }
 
+void HeatmapPublisher::copy_and_change_to_percentages_thermal_image(const sensor_msgs::msg::Image image_msg) {
+    for (auto i = 0u; i < IMAGE_WIDTH; i++) {
+        for (auto j = 0u; j < IMAGE_HEIGHT; j++) {
+            single_thermal_image_.data[i * IMAGE_HEIGHT + j] = image_msg.data[j * IMAGE_WIDTH + i] * 100 / 256;
+        }
+    }
+}
+
+cv::Mat HeatmapPublisher::create_image_from_heatmap() {
+    cv::Mat heatmap_image(heatmap_msg_.info.height, heatmap_msg_.info.width, CV_8UC1);
+    for (auto i = 0u; i < heatmap_msg_.info.height * heatmap_msg_.info.width; ++i) {
+        heatmap_image.data[i] = heatmap_msg_.data[i];
+    }
+    return heatmap_image;
+}
+
+cv::Mat HeatmapPublisher::rotate_image(cv::Mat image) {
+    tf2::Quaternion q_orig, q_rot, q_new;
+    q_orig.setRPY(0, 0, 0);
+    tf2::convert(thermal_camera_image_offset_to_map_transform_.transform.rotation, q_rot);
+    q_new = q_rot * q_orig;
+    q_new.normalize();
+    tf2::Matrix3x3 m(q_new);
+    double roll, pitch, yaw;
+    m.getRPY(roll, pitch, yaw);
+    yaw *= -1 * 180 / M_PI;
+    yaw -= M_PI/2;
+    RCLCPP_INFO(get_logger(), "Image rotate angle : %f", yaw);
+
+    cv::Point2f center((image.cols - 1) / 2.0, (image.rows - 1) / 2.0);
+    cv::Mat rot = cv::getRotationMatrix2D(center, yaw, 1.0);
+    // determine bounding rectangle, center not relevant
+    cv::Rect2f bbox = cv::RotatedRect(cv::Point2f(), image.size(), yaw).boundingRect2f();
+    // adjust transformation matrix
+    rot.at<double>(0, 2) += bbox.width / 2.0 - image.cols / 2.0;
+    rot.at<double>(1, 2) += bbox.height / 2.0 - image.rows / 2.0;
+
+    cv::Mat dst;
+    cv::warpAffine(image, dst, rot, bbox.size());
+    std::cout << dst << std::endl;
+
+    return dst;
+}
+
+cv::Mat HeatmapPublisher::create_mask(cv::Mat image) {
+    cv::Mat mask = image.clone();
+    for (auto i = 0u; i < mask.total(); ++i) {
+        mask.data[i] = mask.data[i]? 0 : 255;
+    }
+    return mask;
+}
+
 void HeatmapPublisher::thermal_camera_callback(const sensor_msgs::msg::Image image_msg) {
-    // single_thermal_image_ = std::make_shared<cv::Mat>(IMAGE_WIDTH, IMAGE_HEIGHT, CV_8UC3, image_msg.data);
     if (heatmap_msg_.info.width == 0 or heatmap_msg_.info.height == 0) {
         RCLCPP_INFO(get_logger(), "Skipping creating image...");
         return;
     }
+    copy_and_change_to_percentages_thermal_image(image_msg);
 
-    RCLCPP_INFO(get_logger(), "Creating image...");
+    double real_position_dx = thermal_camera_image_offset_to_map_transform_.transform.translation.x - heatmap_msg_.info.origin.position.x;
+    double real_position_dy = thermal_camera_image_offset_to_map_transform_.transform.translation.y - heatmap_msg_.info.origin.position.y;
+    uint image_position_x = real_position_dx / heatmap_msg_.info.resolution;
+    uint image_position_y = real_position_dy / heatmap_msg_.info.resolution;
 
-    for (auto i = 0u; i < IMAGE_WIDTH; i++) {
-        for (auto j = 0u; j < IMAGE_HEIGHT; j++) {
-            single_thermal_image_.data[i * IMAGE_HEIGHT + j] = image_msg.data[j * IMAGE_WIDTH + i];
-        }
-    }
+    auto heatmap_image = create_image_from_heatmap();
+    auto rotated_single_thermal_image_ = rotate_image(single_thermal_image_);
 
-    cv::Mat heatmap_image(heatmap_msg_.info.height, heatmap_msg_.info.width, CV_8UC1);
-    RCLCPP_INFO(get_logger(), "Heatmap image size: x: %d, y: %d", heatmap_msg_.info.width, heatmap_msg_.info.height);
+    auto mask = create_mask(rotated_single_thermal_image_);
     RCLCPP_INFO(get_logger(), "Copy thermal image...");
-
-    single_thermal_image_.copyTo(heatmap_image(cv::Rect(0, 0, single_thermal_image_.cols, single_thermal_image_.rows)));
+    for (auto i = 0u; i < rotated_single_thermal_image_.total(); ++i) {
+        rotated_single_thermal_image_.data[i] = not rotated_single_thermal_image_.data[i] ? 255 : rotated_single_thermal_image_.data[i];
+    }
+    rotated_single_thermal_image_.copyTo(heatmap_image(cv::Rect(image_position_x, image_position_y, rotated_single_thermal_image_.cols, rotated_single_thermal_image_.rows)), heatmap_image(cv::Rect(image_position_x, image_position_y, mask.cols, mask.rows)));
     for (auto i = 0u; i < heatmap_msg_.info.height * heatmap_msg_.info.width; ++i) {
-        if (heatmap_image.data[i] == 255){
+        if (heatmap_image.data[i] == 255) {
             heatmap_msg_.data[i] = -1;
         }
-        else{
-            heatmap_msg_.data[i] = heatmap_image.data[i] * 100 / 256;
+        // else if (heatmap_image.data[i] > 1) {
+        //     heatmap_msg_.data[i] = (heatmap_image.data[i] + heatmap_msg_.data[i]) / 2;
+        // }
+        else {
+            heatmap_msg_.data[i] = heatmap_image.data[i];
         }
     }
 }
