@@ -29,7 +29,6 @@ constexpr char THERMAL_CAMERA_TOPIC_NAME[] = "thermal_camera";
 constexpr char MAP_FRAME_NAME[] = "map";
 constexpr char ODOM_FRAME_NAME[] = "odom";
 constexpr char BASE_LINK_FRAME_NAME[] = "base_link";
-constexpr char HEATMAP_OFFSET_FRAME_NAME[] = "heatmap_offset";
 constexpr char HEATMAP_FRAME_NAME[] = "floor_heatmap_frame";
 constexpr char THERMAL_CAMERA_FRAME_NAME[] = "thermal_camera_frame";
 
@@ -49,24 +48,26 @@ class HeatmapPublisher : public rclcpp::Node {
    private:
     void create_heatmap_to_map_tf();
     void create_thermal_camera_to_base_link_tf();
-    void create_heatmap_origin_to_thermal_camera_tf();
     void calculate_heatmap_resolution();
     void update_heatmap();
     void map_callback(const nav_msgs::msg::OccupancyGrid map_msg);
     void thermal_camera_callback(const sensor_msgs::msg::Image image_msg);
     void sync_heatmap_info_with_map(const nav_msgs::msg::OccupancyGrid map_msg);
     void timer_callback();
-    void take_heatmap_offset_to_map_transform();
+    void take_thermal_camera_to_map_transform();
     void copy_and_change_to_percentages_thermal_image(const sensor_msgs::msg::Image image_msg);
+    void mirror_single_thermal_msg();
+
     cv::Mat create_image_from_heatmap();
-    cv::Mat rotate_image(cv::Mat image);
+    cv::Mat rotate_single_thermal_image(cv::Mat image);
     cv::Mat create_mask(cv::Mat image);
 
-    geometry_msgs::msg::Quaternion rotate_z_axis_by_angle(geometry_msgs::msg::Quaternion quaternion, double angle);
+    geometry_msgs::msg::Quaternion rotate_z_axis_by_angle(const geometry_msgs::msg::Quaternion &quaternion,const double angle) const;
+    geometry_msgs::msg::Vector3 take_vector_to_image_center(const cv::Mat &image) const;
 
     rclcpp::TimerBase::SharedPtr timer_;
     nav_msgs::msg::OccupancyGrid heatmap_msg_;
-    geometry_msgs::msg::TransformStamped thermal_camera_image_offset_to_map_transform_;
+    geometry_msgs::msg::TransformStamped thermal_camera_to_map_transform_;
 
     std::shared_ptr<tf2_ros::TransformListener> transform_listener_{nullptr};
     std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
