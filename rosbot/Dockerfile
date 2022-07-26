@@ -18,10 +18,10 @@ RUN git clone https://github.com/opencv/opencv.git && \
     rm -rf /opencv
 
 RUN apt-get update && \
-    apt-get install -y  ros-$ROS_DISTRO-nav-msgs ros-$ROS_DISTRO-rqt-image-view \
+    apt-get install -y  ros-$ROS_DISTRO-nav-msgs ros-$ROS_DISTRO-rqt-image-view ros-$ROS_DISTRO-teleop-twist-keyboard \
     ros-$ROS_DISTRO-rmw-cyclonedds-cpp \
     && \
-    apt-get autoremove -y && \
+    # apt-get autoremove -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 

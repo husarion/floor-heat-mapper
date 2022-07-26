@@ -1,22 +1,19 @@
-# Quick Start
-# $ xhost local:root
-# $ docker compose -f compose.rviz.yaml -f compose.rviz.vpn.yaml up
-
+# Quick Start (at fist stop ROS Master if working on host)
+# $ docker compose -f compose.rosbot.hardware.yaml -f compose.rosbot.mapping.yaml -f compose.rosbot.lan.yaml up
+version: "3"
 services:
-
-  # ROS Galactic
-  rviz:
-    network_mode: service:husarnet-rviz
+  micro-ros-agent:
+    network_mode: service:husarnet-heatmapping
     volumes:
       - ./secret/dds-config.xml:/dds-config.xml
     environment:
       - FASTRTPS_DEFAULT_PROFILES_FILE=/dds-config.xml
 
-  husarnet-rviz:
+  husarnet-heatmapping:
     image: husarnet/husarnet
     volumes:
       - /var/lib/husarnet
-      - ./secret/id_rviz:/var/lib/husarnet/id
+      - ./secret/id_rosbot:/var/lib/husarnet/id
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=0
     cap_add:
@@ -24,5 +21,5 @@ services:
     devices:
       - /dev/net/tun
     environment:
-      - HOSTNAME=rviz
+      - HOSTNAME=rosbot
       - JOINCODE

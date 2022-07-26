@@ -12,13 +12,6 @@ services:
     environment:
       - FASTRTPS_DEFAULT_PROFILES_FILE=/dds-config.xml
 
-  map-publisher:
-    network_mode: service:husarnet-rviz
-    volumes:
-      - ./secret/dds-config.xml:/dds-config.xml
-    environment:
-      - FASTRTPS_DEFAULT_PROFILES_FILE=/dds-config.xml
-
   husarnet-rviz:
     image: husarnet/husarnet
     volumes:

@@ -1,0 +1,13 @@
+# Quick Start (at fist stop ROS Master if working on host)
+# $ docker compose -f compose.rosbot.hardware.yaml -f compose.rosbot.mapping.yaml -f compose.rosbot.lan.yaml up
+version: "3"
+services:
+  micro-ros-agent:
+    image: microros/micro-ros-agent:humble
+    volumes:
+      - /dev:/dev
+    devices:
+      - /dev/ttyACM0:/dev/ttyACM0
+    command: serial --dev /dev/ttyACM0 -v6
+
+
