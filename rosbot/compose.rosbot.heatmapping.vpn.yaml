@@ -1,13 +1,13 @@
 # Quick Start (at fist stop ROS Master if working on host)
-# $ docker compose -f compose.rosbot.hardware.yaml -f compose.rosbot.mapping.yaml -f compose.rosbot.lan.yaml up
+# $ docker-compose -f compose.rosbot.heatmapping.yaml  -f compose.rosbot.heatmapping.vpn.yaml up
 version: "3"
 services:
   micro-ros-agent:
     network_mode: service:husarnet-heatmapping
     volumes:
-      - ./secret/dds-config.xml:/dds-config.xml
+      - ./secret/dds-config.xml:/tmp/disable_fastdds_shm.xml
     environment:
-      - FASTRTPS_DEFAULT_PROFILES_FILE=/dds-config.xml
+      - FASTRTPS_DEFAULT_PROFILES_FILE=/tmp/disable_fastdds_shm.xml
 
   husarnet-heatmapping:
     image: husarnet/husarnet

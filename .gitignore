@@ -2,3 +2,4 @@
 **/.vscode/
 **/secret/
 .env
+**/maps/

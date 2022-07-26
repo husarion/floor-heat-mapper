@@ -1,5 +1,5 @@
 # Quick Start (at fist stop ROS Master if working on host)
-# $ docker compose -f compose.rosbot.hardware.yaml -f compose.rosbot.mapping.yaml -f compose.rosbot.lan.yaml up
+# $ docker compose -f compose.rosbot.heatmapping.yaml up
 version: "3"
 services:
   micro-ros-agent:
