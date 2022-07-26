@@ -2,9 +2,7 @@
 
 constexpr uint8_t LED_PIN = 25;
 rcl_publisher_t image_pub;
-rcl_publisher_t info_pub;
-sensor_msgs__msg__Image image_msg;
-std_msgs__msg__UInt16MultiArray info_msg;
+static sensor_msgs__msg__Image image_msg;
 
 rclc_executor_t executor;
 rclc_support_t support;
@@ -12,8 +10,8 @@ rcl_allocator_t allocator;
 rcl_node_t node;
 rcl_timer_t timer;
 
-float image_data_temperature[IMAGE_HEIGHT * IMAGE_WIDTH];
-uint8_t image_data_ros[IMAGE_HEIGHT * IMAGE_WIDTH];
+static float image_data_temperature[IMAGE_HEIGHT * IMAGE_WIDTH] = {0.0};
+static uint16_t image_data_ros[IMAGE_HEIGHT * IMAGE_WIDTH] = {0};
 extern void setup();
 extern int main();
 
@@ -99,13 +97,13 @@ void timer_init() {
 }
 
 void fill_image_msg_constants() {
-    image_msg.header.frame_id.data = (char*)THERMAL_CAMERA_FRAME_NAME;
+    image_msg.header.frame_id.data = (char*)(THERMAL_CAMERA_FRAME_NAME);
     image_msg.width = IMAGE_WIDTH;
     image_msg.height = IMAGE_HEIGHT;
-    image_msg.encoding.data = (char*)"mono8";
+    image_msg.encoding.data = "mono16";
     image_msg.is_bigendian = false;
-    image_msg.step = IMAGE_WIDTH;
-    image_msg.data.data = (uint8_t*)image_data_ros;
+    image_msg.step = 32;
+    image_msg.data.data = (uint8_t*)(image_data_ros);
     image_msg.data.size = sizeof(image_data_ros);
 }
 
@@ -114,12 +112,18 @@ void fill_image_msg_with_thermal_camera() {
     image_msg.header.stamp.nanosec = currnet_timestamp.tv_nsec;
     image_msg.header.stamp.sec = currnet_timestamp.tv_sec;
     mirror_thermal_image();
-    filter_nan_values();
     for (uint8_t i = 0; i < IMAGE_HEIGHT * IMAGE_WIDTH; ++i) {
         if (image_data_temperature[i] < 0.0) {
             image_data_temperature[i] = 0.0;
         }
-        image_data_ros[i] = image_data_temperature[i] * 3;
+        // nan
+        if (image_data_temperature[i] != image_data_temperature[i]) {
+            auto sum = image_data_temperature[i - 1] + image_data_temperature[i + 1];
+            sum += image_data_temperature[i - IMAGE_WIDTH] + image_data_temperature[i - IMAGE_WIDTH - 1] + image_data_temperature[i - IMAGE_WIDTH + 1];
+            sum += image_data_temperature[i + IMAGE_WIDTH] + image_data_temperature[i + IMAGE_WIDTH - 1] + image_data_temperature[i + IMAGE_WIDTH + 1];
+            image_data_temperature[i] = sum / 8;
+        }
+        image_data_ros[i] = image_data_temperature[i] * 10;
     }
 }
 
@@ -139,21 +143,6 @@ void mirror_thermal_image() {
             auto saved_value = image_data_temperature[j + i * IMAGE_WIDTH];
             image_data_temperature[j + i * IMAGE_WIDTH] = image_data_temperature[j + ((IMAGE_HEIGHT - 1 - i) * IMAGE_WIDTH)];
             image_data_temperature[j + ((IMAGE_HEIGHT - 1 - i) * IMAGE_WIDTH)] = saved_value;
-        }
-    }
-}
-
-// todo: figure out why sensor puts nan in one static value
-void filter_nan_values() {
-    for (uint8_t i = 0; i < IMAGE_HEIGHT * IMAGE_WIDTH; ++i) {
-        if (image_data_temperature[i] != image_data_temperature[i]) {
-            if (i != 0 or i != IMAGE_HEIGHT * IMAGE_WIDTH - 1) {
-                image_data_temperature[i] = (image_data_temperature[i - 1] + image_data_temperature[i - 1]) / 2;
-            } else if (i == 0) {
-                image_data_temperature[i] = image_data_temperature[i + 1];
-            } else if (i == IMAGE_HEIGHT * IMAGE_WIDTH - 1) {
-                image_data_temperature[i] = image_data_temperature[i - 1];
-            }
         }
     }
 }

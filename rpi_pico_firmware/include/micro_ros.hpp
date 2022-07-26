@@ -31,7 +31,7 @@
 
 constexpr char NODE_NAME[] = "Thermal_Camera";
 constexpr char PUBLISHER_NAME[] = "thermal_camera";
-
+constexpr size_t ROS_DOMAIN_ID = 126;
 
 constexpr char THERMAL_CAMERA_FRAME_NAME[] = "thermal_camera_frame";
 constexpr uint8_t BUFFER_LENGHT = 10;
@@ -55,5 +55,6 @@ void timer_init();
 void fill_image_msg_with_thermal_camera();
 void fill_image_msg_constants();
 void mirror_thermal_image();
-void filter_nan_values();
+
+float& take_pixel_from(int x, int y);
 timespec get_time_stamp();

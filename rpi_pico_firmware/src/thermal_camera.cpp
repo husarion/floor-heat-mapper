@@ -46,10 +46,7 @@ void thermal_camera_read_data(float read_data[]){
     uint16_t mlx90640Frame[300];
     int status = MLX90641_GetFrameData(THERMAL_CAMERA_I2C_ADDRESS, mlx90640Frame);
     float vdd = MLX90641_GetVdd(mlx90640Frame, &thermal_camera_params);
-    float Ta = MLX90641_GetTa(mlx90640Frame, &thermal_camera_params);
-
-    float tr = Ta - TA_SHIFT;
-    float emissivity = 0.95;
-
-    MLX90641_CalculateTo(mlx90640Frame, &thermal_camera_params, emissivity, tr, read_data);
+    float ambient = MLX90641_GetTa(mlx90640Frame, &thermal_camera_params);
+    float emissivity = MLX90641_GetEmissivity(&thermal_camera_params);
+    MLX90641_CalculateTo(mlx90640Frame, &thermal_camera_params, emissivity, ambient, read_data);
 }
