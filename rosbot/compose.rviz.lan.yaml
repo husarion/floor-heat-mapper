@@ -18,10 +18,3 @@ services:
     environment:
       - ROS_DOMAIN_ID
       - RMW_IMPLEMENTATION
-
-  teleop:
-    network_mode: host
-    ipc: host
-    environment:
-      - ROS_DOMAIN_ID
-      - RMW_IMPLEMENTATION

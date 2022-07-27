@@ -1,0 +1,4 @@
+[submodule "rosbot/src/vision_opencv"]
+	path = rosbot/src/vision_opencv
+	url = https://github.com/ros-perception/vision_opencv.git
+	branch = ros2

@@ -20,6 +20,8 @@
   <depend>geometry_msgs</depend>
   <depend>sensor_msgs</depend>
   <depend>OpenCv</depend>
+  <depend>cv_bridge</depend>
+
 
 
 

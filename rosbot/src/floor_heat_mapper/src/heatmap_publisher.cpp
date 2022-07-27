@@ -1,26 +1,25 @@
 #include "floor_heat_mapper/heatmap_publisher.hpp"
 
 namespace floor_heat_mapper {
-HeatmapPublisher::HeatmapPublisher()
-    : rclcpp::Node(NODE_NAME), single_thermal_image_(IMAGE_WIDTH, IMAGE_HEIGHT, CV_8UC1) {
+FloorHeatMapper::FloorHeatMapper()
+    : rclcpp::Node(NODE_NAME), single_thermal_image_(IMAGE_WIDTH, IMAGE_HEIGHT, CV_16UC1) {
     static_tf_pub_ = std::make_shared<tf2_ros::StaticTransformBroadcaster>(this);
     using namespace std::chrono_literals;
     using std::placeholders::_1;
     heatmap_pub_ = create_publisher<nav_msgs::msg::OccupancyGrid>(HEATMAP_TOPIC_NAME, 10);
-    map_sub_ = create_subscription<nav_msgs::msg::OccupancyGrid>(MAP_TOPIC_NAME, 10, std::bind(&HeatmapPublisher::map_callback, this, _1));
-    thermal_camera_image_sub_ = create_subscription<sensor_msgs::msg::Image>(THERMAL_CAMERA_TOPIC_NAME, 10, std::bind(&HeatmapPublisher::thermal_camera_callback, this, _1));
-    timer_ = this->create_wall_timer(100ms, std::bind(&HeatmapPublisher::timer_callback, this));
+    map_sub_ = create_subscription<nav_msgs::msg::OccupancyGrid>(MAP_TOPIC_NAME, 10, std::bind(&FloorHeatMapper::map_callback, this, _1));
+    thermal_camera_image_sub_ = create_subscription<sensor_msgs::msg::Image>(THERMAL_CAMERA_TOPIC_NAME, 10, std::bind(&FloorHeatMapper::thermal_camera_callback, this, _1));
+    timer_ = this->create_wall_timer(100ms, std::bind(&FloorHeatMapper::timer_callback, this));
 
     tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
     transform_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
     calculate_heatmap_resolution();
     create_thermal_camera_to_base_link_tf();
-    create_heatmap_to_map_tf();
-    RCLCPP_INFO(get_logger(), "Map constructed!");
+    RCLCPP_INFO(get_logger(), "Configured mapping, wainting for /%s and /%s...", THERMAL_CAMERA_TOPIC_NAME, MAP_TOPIC_NAME);
 }
 
-void HeatmapPublisher::create_thermal_camera_to_base_link_tf() {
+void FloorHeatMapper::create_thermal_camera_to_base_link_tf() {
     geometry_msgs::msg::TransformStamped t;
     t.header.stamp = now();
     t.header.frame_id = BASE_LINK_FRAME_NAME;
@@ -30,42 +29,32 @@ void HeatmapPublisher::create_thermal_camera_to_base_link_tf() {
     static_tf_pub_->sendTransform(t);
 }
 
-void HeatmapPublisher::create_heatmap_to_map_tf() {
-    geometry_msgs::msg::TransformStamped t;
-    t.header.stamp = now();
-    t.header.frame_id = HEATMAP_FRAME_NAME;
-    t.child_frame_id = MAP_FRAME_NAME;
-    static_tf_pub_->sendTransform(t);
-}
-
-void HeatmapPublisher::calculate_heatmap_resolution() {
+void FloorHeatMapper::calculate_heatmap_resolution() {
     heatmap_msg_.info.resolution = tan(THERMAL_CAMERA_X_FOV_HALF_ANGLE) * THERMAL_CAMERA_FRAME_Z / 2 / IMAGE_WIDTH;
 }
 
-void HeatmapPublisher::timer_callback() {
+void FloorHeatMapper::timer_callback() {
     take_thermal_camera_to_map_transform();
     update_heatmap();
 }
 
-void HeatmapPublisher::take_thermal_camera_to_map_transform() {
+void FloorHeatMapper::take_thermal_camera_to_map_transform() {
     try {
         thermal_camera_to_map_transform_ = tf_buffer_->lookupTransform(
-            HEATMAP_FRAME_NAME, THERMAL_CAMERA_FRAME_NAME,
+            MAP_FRAME_NAME, THERMAL_CAMERA_FRAME_NAME,
             tf2::TimePointZero);
     } catch (tf2::TransformException& ex) {
-        // RCLCPP_INFO(get_logger(), "Could not transform %s to %s: %s",
-        //             MAP_FRAME_NAME, TH, ex.what());
         return;
     }
 }
 
-void HeatmapPublisher::update_heatmap() {
+void FloorHeatMapper::update_heatmap() {
     heatmap_msg_.header.stamp = now();
-    heatmap_msg_.header.frame_id = HEATMAP_FRAME_NAME;
+    heatmap_msg_.header.frame_id = MAP_FRAME_NAME;
     heatmap_pub_->publish(heatmap_msg_);
 }
 
-geometry_msgs::msg::Quaternion HeatmapPublisher::rotate_z_axis_by_angle(const geometry_msgs::msg::Quaternion& quaternion, double angle) const {
+geometry_msgs::msg::Quaternion FloorHeatMapper::rotate_z_axis_by_angle(const geometry_msgs::msg::Quaternion& quaternion, double angle) const {
     tf2::Quaternion q_orig, q_rot, q_new;
     tf2::convert(quaternion, q_orig);
     q_rot.setRPY(0.0, 0.0, angle);
@@ -74,7 +63,7 @@ geometry_msgs::msg::Quaternion HeatmapPublisher::rotate_z_axis_by_angle(const ge
     return tf2::toMsg(q_new);
 }
 
-geometry_msgs::msg::Vector3 HeatmapPublisher::take_vector_to_image_center(const cv::Mat& image) const {
+geometry_msgs::msg::Vector3 FloorHeatMapper::take_vector_to_image_center(const cv::Mat& image) const {
     tf2::Quaternion q_orig, q_rot, q_new;
     q_orig.setRPY(0, 0, 0);
     tf2::convert(thermal_camera_to_map_transform_.transform.rotation, q_rot);
@@ -92,17 +81,19 @@ geometry_msgs::msg::Vector3 HeatmapPublisher::take_vector_to_image_center(const 
     return tf2::toMsg(tf2_vec);
 }
 
-void HeatmapPublisher::map_callback(const nav_msgs::msg::OccupancyGrid map_msg) {
+void FloorHeatMapper::map_callback(const nav_msgs::msg::OccupancyGrid map_msg) {
     sync_heatmap_info_with_map(map_msg);
 }
 
-void HeatmapPublisher::sync_heatmap_info_with_map(const nav_msgs::msg::OccupancyGrid map_msg) {
+void FloorHeatMapper::sync_heatmap_info_with_map(const nav_msgs::msg::OccupancyGrid map_msg) {
     RCLCPP_INFO(get_logger(), "Sync map info");
     double real_size_x = map_msg.info.width * map_msg.info.resolution;
     double real_size_y = map_msg.info.height * map_msg.info.resolution;
     RCLCPP_INFO(get_logger(), "Map size x: %lf, y:%lf", real_size_x, real_size_y);
     auto old_heatmap_x = heatmap_msg_.info.width;
     auto old_heatmap_y = heatmap_msg_.info.height;
+    auto old_width = heatmap_msg_.info.width;
+    auto old_height = heatmap_msg_.info.height;
 
     heatmap_msg_.info.width = (real_size_x / heatmap_msg_.info.resolution);
     heatmap_msg_.info.height = (real_size_y / heatmap_msg_.info.resolution);
@@ -110,28 +101,27 @@ void HeatmapPublisher::sync_heatmap_info_with_map(const nav_msgs::msg::Occupancy
 
     if (old_heatmap_x * old_heatmap_y != heatmap_msg_.info.width * heatmap_msg_.info.height) {
         RCLCPP_INFO(get_logger(), "Resizeing map...");
+        auto last_heat_map = heatmap_msg_;
         heatmap_msg_.data.resize(heatmap_msg_.info.width * heatmap_msg_.info.height);
+        for (auto i = 0u; i < old_width; i++) {
+            for (auto j = 0u; j < old_height; j++) {
+                heatmap_msg_.data[i * IMAGE_HEIGHT + j] = last_heat_map.data[j * IMAGE_WIDTH + i];
+            }
+        }
         for (auto i = old_heatmap_x * old_heatmap_y; i < heatmap_msg_.info.width * heatmap_msg_.info.height; ++i) {
             heatmap_msg_.data[i] = -1;
         }
     }
+    RCLCPP_INFO(get_logger(), "Map constructed!");
 }
 
-void HeatmapPublisher::copy_and_change_to_percentages_thermal_image(const sensor_msgs::msg::Image image_msg) {
-    for (auto i = 0u; i < IMAGE_WIDTH; i++) {
-        for (auto j = 0u; j < IMAGE_HEIGHT; j++) {
-            single_thermal_image_.data[i * IMAGE_HEIGHT + j] = image_msg.data[j * IMAGE_WIDTH + i] * 100 / 256;
-        }
-    }
-}
-
-void HeatmapPublisher::mirror_single_thermal_msg() {
+void FloorHeatMapper::mirror_single_thermal_msg() {
     for (auto i = 0u; i < IMAGE_WIDTH * IMAGE_HEIGHT / 2; i++) {
         std::swap(single_thermal_image_.data[i], single_thermal_image_.data[IMAGE_WIDTH * IMAGE_HEIGHT - 1 - i]);
     }
 }
 
-cv::Mat HeatmapPublisher::create_image_from_heatmap() {
+cv::Mat FloorHeatMapper::create_image_from_heatmap() {
     cv::Mat heatmap_image(heatmap_msg_.info.height, heatmap_msg_.info.width, CV_8UC1);
     for (auto i = 0u; i < heatmap_msg_.info.height * heatmap_msg_.info.width; ++i) {
         heatmap_image.data[i] = heatmap_msg_.data[i];
@@ -139,7 +129,7 @@ cv::Mat HeatmapPublisher::create_image_from_heatmap() {
     return heatmap_image;
 }
 
-cv::Mat HeatmapPublisher::rotate_single_thermal_image(cv::Mat image) {
+cv::Mat FloorHeatMapper::rotate_image(cv::Mat image) {
     tf2::Quaternion q_orig, q_rot, q_new;
     q_orig.setRPY(0, 0, 0);
     tf2::convert(thermal_camera_to_map_transform_.transform.rotation, q_rot);
@@ -162,34 +152,45 @@ cv::Mat HeatmapPublisher::rotate_single_thermal_image(cv::Mat image) {
 
     cv::Mat dst;
     cv::warpAffine(image, dst, rot, bbox.size());
-    std::cout << dst << std::endl;
 
     return dst;
 }
 
-cv::Mat HeatmapPublisher::create_mask(cv::Mat image) {
+cv::Mat FloorHeatMapper::create_mask(cv::Mat image) {
     cv::Mat mask = image.clone();
     for (auto i = 0u; i < mask.total(); ++i) {
-        mask.data[i] = mask.data[i] ? 0 : 255;
+        mask.data[i] = mask.data[i] ? 0 : 100;
     }
     return mask;
 }
 
-void HeatmapPublisher::thermal_camera_callback(const sensor_msgs::msg::Image image_msg) {
+void FloorHeatMapper::thermal_camera_callback(const sensor_msgs::msg::Image image_msg) {
     if (heatmap_msg_.info.width == 0 or heatmap_msg_.info.height == 0) {
-        RCLCPP_INFO(get_logger(), "Skipping creating image...");
+        RCLCPP_INFO(get_logger(), "Waiting for /%s topic...", MAP_TOPIC_NAME);
         return;
     }
     if (heatmap_msg_.info.origin.position.x == 0 or heatmap_msg_.info.origin.position.y == 0) {
-        RCLCPP_INFO(get_logger(), "Skipping creating image...");
+        RCLCPP_INFO(get_logger(), "Waiting for /%s topic...", MAP_TOPIC_NAME);
+
         return;
     }
-    copy_and_change_to_percentages_thermal_image(image_msg);
-    mirror_single_thermal_msg();
+
+    cv_bridge::CvImagePtr cv_ptr;
+    try {
+        cv_ptr = cv_bridge::toCvCopy(image_msg, sensor_msgs::image_encodings::MONO16);
+    } catch (cv_bridge::Exception& e) {
+        RCLCPP_ERROR(get_logger(), "cv_bridge exception: %s", e.what());
+        return;
+    }
+
+    // mirror_single_thermal_msg();
 
     auto heatmap_image = create_image_from_heatmap();
-    auto rotated_single_thermal_image_ = rotate_single_thermal_image(single_thermal_image_);
-    // auto rotated_single_thermal_image_ = (single_thermal_image_);
+    cv::Mat normalized_image;
+    cv::normalize(cv_ptr->image, normalized_image, 90, 40, cv::NORM_MINMAX, -1, cv::noArray());
+
+    normalized_image.convertTo(normalized_image, CV_8UC1, 1);
+    auto rotated_single_thermal_image_ = rotate_image(normalized_image);
 
     auto to_image_center_vector = take_vector_to_image_center(rotated_single_thermal_image_);
 
@@ -202,19 +203,27 @@ void HeatmapPublisher::thermal_camera_callback(const sensor_msgs::msg::Image ima
     uint image_position_y = real_position_dy / heatmap_msg_.info.resolution;
 
     auto mask = create_mask(rotated_single_thermal_image_);
-    RCLCPP_INFO(get_logger(), "Copy thermal image...");
+
+
+    cv::Mat edges_image;
+    cv::Canny(rotated_single_thermal_image_, edges_image, 60, 200);
     for (auto i = 0u; i < rotated_single_thermal_image_.total(); ++i) {
-        rotated_single_thermal_image_.data[i] = not rotated_single_thermal_image_.data[i] ? 255 : rotated_single_thermal_image_.data[i];
+        if (edges_image.data[i]== 255) {
+            rotated_single_thermal_image_.data[i] = 255;
+        } else{
+            rotated_single_thermal_image_.data[i] = not rotated_single_thermal_image_.data[i] ? 255 : rotated_single_thermal_image_.data[i];
+        }
     }
-    rotated_single_thermal_image_.copyTo(heatmap_image(cv::Rect(image_position_x, image_position_y, rotated_single_thermal_image_.cols, rotated_single_thermal_image_.rows)), heatmap_image(cv::Rect(image_position_x, image_position_y, mask.cols, mask.rows)));
+
+    std::cout << edges_image << std::endl;
+
+    rotated_single_thermal_image_.copyTo(heatmap_image(cv::Rect(image_position_x, image_position_y, rotated_single_thermal_image_.cols, rotated_single_thermal_image_.rows)), heatmap_image(cv::Rect(image_position_x, image_position_y, mask.cols, mask.rows)) == 255);
     for (auto i = 0u; i < heatmap_msg_.info.height * heatmap_msg_.info.width; ++i) {
         if (heatmap_image.data[i] == 255) {
             heatmap_msg_.data[i] = -1;
-        }
-        // else if (heatmap_image.data[i] > 1) {
-        //     heatmap_msg_.data[i] = (heatmap_image.data[i] + heatmap_msg_.data[i]) / 2;
-        // }
-        else {
+            } else if (heatmap_image.data[i] > 1) {
+                heatmap_msg_.data[i] = (heatmap_image.data[i] + heatmap_msg_.data[i]) / 2;
+        } else {
             heatmap_msg_.data[i] = heatmap_image.data[i];
         }
     }
