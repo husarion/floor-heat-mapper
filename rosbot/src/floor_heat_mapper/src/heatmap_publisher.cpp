@@ -115,12 +115,6 @@ void FloorHeatMapper::sync_heatmap_info_with_map(const nav_msgs::msg::OccupancyG
     RCLCPP_INFO(get_logger(), "Map constructed!");
 }
 
-void FloorHeatMapper::mirror_single_thermal_msg() {
-    for (auto i = 0u; i < IMAGE_WIDTH * IMAGE_HEIGHT / 2; i++) {
-        std::swap(single_thermal_image_.data[i], single_thermal_image_.data[IMAGE_WIDTH * IMAGE_HEIGHT - 1 - i]);
-    }
-}
-
 cv::Mat FloorHeatMapper::create_image_from_heatmap() {
     cv::Mat heatmap_image(heatmap_msg_.info.height, heatmap_msg_.info.width, CV_8UC1);
     for (auto i = 0u; i < heatmap_msg_.info.height * heatmap_msg_.info.width; ++i) {
@@ -139,21 +133,44 @@ cv::Mat FloorHeatMapper::rotate_image(cv::Mat image) {
     double roll, pitch, yaw;
     m.getRPY(roll, pitch, yaw);
     yaw *= -1 * 180 / M_PI;
-    yaw -= M_PI / 2;
+    yaw += 90;
     RCLCPP_INFO(get_logger(), "Image rotate angle : %f", yaw);
 
-    cv::Point2f center((image.cols - 1) / 2.0, (image.rows - 1) / 2.0);
+    // Mirror y image
+    cv::Mat mirrored;
+    cv::flip(image, mirrored, 0);
+
+    cv::Rect2f bbox = cv::RotatedRect(cv::Point2f(), mirrored.size(), yaw).boundingRect2f();
+
+    // Rotate cropped image
+    cv::Mat cropped_image;
+    cv::Rect crop_region(1, 1, mirrored.cols - 2, mirrored.rows - 2);
+    cropped_image = mirrored(crop_region);
+
+    cv::Point2f center_small((cropped_image.cols - 1) / 2.0, (cropped_image.rows - 1) / 2.0);
+    cv::Mat rot_small = cv::getRotationMatrix2D(center_small, yaw, 1.0);
+    rot_small.at<double>(0, 2) += bbox.width / 2.0 - cropped_image.cols / 2.0;
+    rot_small.at<double>(1, 2) += bbox.height / 2.0 - cropped_image.rows / 2.0;
+
+    cv::Mat small_rotated;
+    cv::warpAffine(cropped_image, small_rotated, rot_small, bbox.size());
+
+    // Rotate image
+    cv::Mat without_noices;
+    cv::Point2f center((mirrored.cols - 1) / 2.0, (mirrored.rows - 1) / 2.0);
     cv::Mat rot = cv::getRotationMatrix2D(center, yaw, 1.0);
-    // determine bounding rectangle, center not relevant
-    cv::Rect2f bbox = cv::RotatedRect(cv::Point2f(), image.size(), yaw).boundingRect2f();
-    // adjust transformation matrix
-    rot.at<double>(0, 2) += bbox.width / 2.0 - image.cols / 2.0;
-    rot.at<double>(1, 2) += bbox.height / 2.0 - image.rows / 2.0;
+    rot.at<double>(0, 2) += bbox.width / 2.0 - mirrored.cols / 2.0;
+    rot.at<double>(1, 2) += bbox.height / 2.0 - mirrored.rows / 2.0;
+    cv::warpAffine(mirrored, without_noices, rot, bbox.size());
 
-    cv::Mat dst;
-    cv::warpAffine(image, dst, rot, bbox.size());
+    // Compare crooped image and remove noices from edges
+    for (auto i = 0u; i < without_noices.total(); ++i) {
+        if (small_rotated.data[i] == 0) {
+            without_noices.data[i] = 255;
+        }
+    }
 
-    return dst;
+    return without_noices;
 }
 
 cv::Mat FloorHeatMapper::create_mask(cv::Mat image) {
@@ -183,11 +200,9 @@ void FloorHeatMapper::thermal_camera_callback(const sensor_msgs::msg::Image imag
         return;
     }
 
-    // mirror_single_thermal_msg();
-
     auto heatmap_image = create_image_from_heatmap();
     cv::Mat normalized_image;
-    cv::normalize(cv_ptr->image, normalized_image, 90, 40, cv::NORM_MINMAX, -1, cv::noArray());
+    cv::normalize(cv_ptr->image, normalized_image, 160, 5, cv::NORM_MINMAX, -1, cv::noArray());
 
     normalized_image.convertTo(normalized_image, CV_8UC1, 1);
     auto rotated_single_thermal_image_ = rotate_image(normalized_image);
@@ -204,25 +219,12 @@ void FloorHeatMapper::thermal_camera_callback(const sensor_msgs::msg::Image imag
 
     auto mask = create_mask(rotated_single_thermal_image_);
 
-
-    cv::Mat edges_image;
-    cv::Canny(rotated_single_thermal_image_, edges_image, 60, 200);
-    for (auto i = 0u; i < rotated_single_thermal_image_.total(); ++i) {
-        if (edges_image.data[i]== 255) {
-            rotated_single_thermal_image_.data[i] = 255;
-        } else{
-            rotated_single_thermal_image_.data[i] = not rotated_single_thermal_image_.data[i] ? 255 : rotated_single_thermal_image_.data[i];
-        }
-    }
-
-    std::cout << edges_image << std::endl;
-
     rotated_single_thermal_image_.copyTo(heatmap_image(cv::Rect(image_position_x, image_position_y, rotated_single_thermal_image_.cols, rotated_single_thermal_image_.rows)), heatmap_image(cv::Rect(image_position_x, image_position_y, mask.cols, mask.rows)) == 255);
     for (auto i = 0u; i < heatmap_msg_.info.height * heatmap_msg_.info.width; ++i) {
         if (heatmap_image.data[i] == 255) {
             heatmap_msg_.data[i] = -1;
-            } else if (heatmap_image.data[i] > 1) {
-                heatmap_msg_.data[i] = (heatmap_image.data[i] + heatmap_msg_.data[i]) / 2;
+        } else if (heatmap_image.data[i] > 1) {
+            heatmap_msg_.data[i] = (heatmap_image.data[i] + heatmap_msg_.data[i]) / 2;
         } else {
             heatmap_msg_.data[i] = heatmap_image.data[i];
         }

@@ -56,7 +56,7 @@ class FloorHeatMapper : public rclcpp::Node {
     void sync_heatmap_info_with_map(const nav_msgs::msg::OccupancyGrid map_msg);
     void timer_callback();
     void take_thermal_camera_to_map_transform();
-    void mirror_single_thermal_msg();
+
 
     cv::Mat create_image_from_heatmap();
     cv::Mat rotate_image(cv::Mat image);
