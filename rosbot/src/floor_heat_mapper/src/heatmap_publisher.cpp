@@ -181,6 +181,20 @@ cv::Mat FloorHeatMapper::create_mask(cv::Mat image) {
     return mask;
 }
 
+cv::Mat FloorHeatMapper::normalize_image_for_temperatures(cv::Mat image) {
+    cv::Mat normalized = image.clone();
+
+    for (auto i = 0u; i < normalized.rows; i++) {
+        for (auto j = 0u; j < normalized.cols; j++) {
+            auto pixel = normalized.at<uint16_t>(i, j);
+            pixel = (static_cast<double>(pixel) - 150.0)* 150 / 200;
+            normalized.at<uint16_t>(i, j) = pixel;
+        }
+    }
+    std::cout << normalized << std::endl;
+    return normalized;
+}
+
 void FloorHeatMapper::thermal_camera_callback(const sensor_msgs::msg::Image image_msg) {
     if (heatmap_msg_.info.width == 0 or heatmap_msg_.info.height == 0) {
         RCLCPP_INFO(get_logger(), "Waiting for /%s topic...", MAP_TOPIC_NAME);
@@ -201,8 +215,7 @@ void FloorHeatMapper::thermal_camera_callback(const sensor_msgs::msg::Image imag
     }
 
     auto heatmap_image = create_image_from_heatmap();
-    cv::Mat normalized_image;
-    cv::normalize(cv_ptr->image, normalized_image, 160, 5, cv::NORM_MINMAX, -1, cv::noArray());
+    cv::Mat normalized_image = normalize_image_for_temperatures(cv_ptr->image);
 
     normalized_image.convertTo(normalized_image, CV_8UC1, 1);
     auto rotated_single_thermal_image_ = rotate_image(normalized_image);

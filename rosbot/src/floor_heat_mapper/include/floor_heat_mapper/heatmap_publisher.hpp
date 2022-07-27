@@ -61,6 +61,7 @@ class FloorHeatMapper : public rclcpp::Node {
     cv::Mat create_image_from_heatmap();
     cv::Mat rotate_image(cv::Mat image);
     cv::Mat create_mask(cv::Mat image);
+    cv::Mat normalize_image_for_temperatures(cv::Mat image);
 
     geometry_msgs::msg::Quaternion rotate_z_axis_by_angle(const geometry_msgs::msg::Quaternion &quaternion,const double angle) const;
     geometry_msgs::msg::Vector3 take_vector_to_image_center(const cv::Mat &image) const;
