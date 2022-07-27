@@ -35,8 +35,6 @@ constexpr size_t ROS_DOMAIN_ID = 126;
 
 constexpr char THERMAL_CAMERA_FRAME_NAME[] = "thermal_camera_frame";
 constexpr uint8_t BUFFER_LENGHT = 10;
-constexpr uint8_t IMAGE_WIDTH = 16;
-constexpr uint8_t IMAGE_HEIGHT = 12;
 
 void error_loop();
 void timer_callback(rcl_timer_t* timer, int64_t last_call_time);

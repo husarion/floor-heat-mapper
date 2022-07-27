@@ -116,13 +116,6 @@ void fill_image_msg_with_thermal_camera() {
         if (image_data_temperature[i] < 0.0) {
             image_data_temperature[i] = 0.0;
         }
-        // nan
-        if (image_data_temperature[i] != image_data_temperature[i]) {
-            auto sum = image_data_temperature[i - 1] + image_data_temperature[i + 1];
-            sum += image_data_temperature[i - IMAGE_WIDTH] + image_data_temperature[i - IMAGE_WIDTH - 1] + image_data_temperature[i - IMAGE_WIDTH + 1];
-            sum += image_data_temperature[i + IMAGE_WIDTH] + image_data_temperature[i + IMAGE_WIDTH - 1] + image_data_temperature[i + IMAGE_WIDTH + 1];
-            image_data_temperature[i] = sum / 8;
-        }
         image_data_ros[i] = image_data_temperature[i] * 10;
     }
 }

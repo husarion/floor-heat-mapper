@@ -4,6 +4,7 @@
 void setup() {
     led_init();
     thermal_camera_init();
+    thermal_camera_calibration();
     micro_ros_init();
 }
 
