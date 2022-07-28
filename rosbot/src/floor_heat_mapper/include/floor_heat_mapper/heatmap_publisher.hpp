@@ -19,6 +19,7 @@
 #include <sensor_msgs/msg/image.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <vector>
+#include <visualization_msgs/msg/marker_array.hpp>
 
 #include "cv_bridge/cv_bridge.h"
 
@@ -28,6 +29,7 @@ constexpr char NODE_NAME[] = "FloorHeatMapper";
 constexpr char HEATMAP_TOPIC_NAME[] = "floor_heatmap";
 constexpr char MAP_TOPIC_NAME[] = "map";
 constexpr char THERMAL_CAMERA_TOPIC_NAME[] = "thermal_camera";
+constexpr char MARKERS_TOPIC_NAME[] = "markers";
 
 constexpr char MAP_FRAME_NAME[] = "map";
 constexpr char ODOM_FRAME_NAME[] = "odom";
@@ -56,28 +58,35 @@ class FloorHeatMapper : public rclcpp::Node {
     void sync_heatmap_info_with_map(const nav_msgs::msg::OccupancyGrid map_msg);
     void timer_callback();
     void take_thermal_camera_to_map_transform();
-
+    void update_markers();
+    void create_heatpoints();
 
     cv::Mat create_image_from_heatmap();
     cv::Mat rotate_image(cv::Mat image);
     cv::Mat create_mask(cv::Mat image);
     cv::Mat normalize_image_for_temperatures(cv::Mat image);
 
-    geometry_msgs::msg::Quaternion rotate_z_axis_by_angle(const geometry_msgs::msg::Quaternion &quaternion,const double angle) const;
-    geometry_msgs::msg::Vector3 take_vector_to_image_center(const cv::Mat &image) const;
+    geometry_msgs::msg::Quaternion rotate_z_axis_by_angle(const geometry_msgs::msg::Quaternion& quaternion, const double angle) const;
+    geometry_msgs::msg::Vector3 take_vector_to_image_center(const cv::Mat& image) const;
 
     rclcpp::TimerBase::SharedPtr timer_;
     nav_msgs::msg::OccupancyGrid heatmap_msg_;
     geometry_msgs::msg::TransformStamped thermal_camera_to_map_transform_;
+    geometry_msgs::msg::Point* hottest_point_;
+    geometry_msgs::msg::Point* coldest_point_;
+    visualization_msgs::msg::Marker heatpoints_marker_;
 
     std::shared_ptr<tf2_ros::TransformListener> transform_listener_{nullptr};
     std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::StaticTransformBroadcaster> static_tf_pub_;
 
     rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr heatmap_pub_;
+    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr heatpoints_marker_pub_;
+
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr thermal_camera_image_sub_;
-
     cv::Mat single_thermal_image_;
+    std::size_t markers_count_ = 0;
+    bool is_map_synced_{false};
 };
 }  // namespace floor_heat_mapper
