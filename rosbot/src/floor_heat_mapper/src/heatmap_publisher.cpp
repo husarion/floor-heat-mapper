@@ -12,6 +12,7 @@ FloorHeatMapper::FloorHeatMapper()
 
     calculate_heatmap_resolution();
     create_thermal_camera_to_base_link_tf();
+    create_heatpoints();
     RCLCPP_INFO(get_logger(), "Configured mapping, wainting for /%s and /%s...", THERMAL_CAMERA_TOPIC_NAME, MAP_TOPIC_NAME);
 
     heatmap_pub_ = create_publisher<nav_msgs::msg::OccupancyGrid>(HEATMAP_TOPIC_NAME, 10);
@@ -20,8 +21,6 @@ FloorHeatMapper::FloorHeatMapper()
     heatpoints_marker_pub_ = create_publisher<visualization_msgs::msg::Marker>(MARKERS_TOPIC_NAME, 10);
 
     timer_ = this->create_wall_timer(100ms, std::bind(&FloorHeatMapper::timer_callback, this));
-    create_heatpoints();
-    heatpoints_marker_pub_->publish(heatpoints_marker_);
 }
 
 void FloorHeatMapper::create_thermal_camera_to_base_link_tf() {
@@ -41,7 +40,6 @@ void FloorHeatMapper::calculate_heatmap_resolution() {
 void FloorHeatMapper::timer_callback() {
     take_thermal_camera_to_map_transform();
     update_heatmap();
-    update_markers();
 }
 
 void FloorHeatMapper::take_thermal_camera_to_map_transform() {
@@ -251,31 +249,28 @@ void FloorHeatMapper::thermal_camera_callback(const sensor_msgs::msg::Image imag
     }
 }
 
-void FloorHeatMapper::update_markers() {
-}
-
 void FloorHeatMapper::create_heatpoints() {
-    heatpoints_marker_.header.stamp = now();
-    heatpoints_marker_.header.frame_id = MAP_FRAME_NAME;
-    heatpoints_marker_.type = visualization_msgs::msg::Marker::POINTS;
-    heatpoints_marker_.action = visualization_msgs::msg::Marker::ADD;
-    heatpoints_marker_.scale.x = 0.05;
-    heatpoints_marker_.scale.y = 0.05;
-    heatpoints_marker_.scale.z = 0.05;
-    heatpoints_marker_.pose.position.z = 0.2;
+    heatpoints_cube_marker_.header.stamp = now();
+    heatpoints_cube_marker_.header.frame_id = MAP_FRAME_NAME;
+    heatpoints_cube_marker_.type = visualization_msgs::msg::Marker::POINTS;
+    heatpoints_cube_marker_.action = 1;
+    heatpoints_cube_marker_.scale.x = 0.05;
+    heatpoints_cube_marker_.scale.y = 0.05;
+    heatpoints_cube_marker_.scale.z = 0.05;
+    heatpoints_cube_marker_.pose.position.z = 0.2;
+    heatpoints_cube_marker_.ns = "points";
+    heatpoints_cube_marker_.color.a = 1.0;
 
-    heatpoints_marker_.color.a = 1.0;
+    heatpoints_cube_marker_.frame_locked = true;
+    heatpoints_cube_marker_.points.resize(2);
+    heatpoints_cube_marker_.colors.resize(2);
+    heatpoints_cube_marker_.colors[0].a = 1.0;
+    heatpoints_cube_marker_.colors[0].r = 1.0;
+    heatpoints_cube_marker_.colors[1].a = 1.0;
+    heatpoints_cube_marker_.colors[1].b = 1.0;
 
-    heatpoints_marker_.frame_locked = true;
-    heatpoints_marker_.points.resize(2);
-    heatpoints_marker_.colors.resize(2);
-    heatpoints_marker_.colors[0].a = 1.0;
-    heatpoints_marker_.colors[0].r = 1.0;
-    heatpoints_marker_.colors[1].a = 1.0;
-    heatpoints_marker_.colors[1].b = 1.0;
-
-    hottest_point_ = &heatpoints_marker_.points[0];
-    coldest_point_ = &heatpoints_marker_.points[1];
+    hottest_point_ = &heatpoints_cube_marker_.points[0];
+    coldest_point_ = &heatpoints_cube_marker_.points[1];
 }
 
 void FloorHeatMapper::mark_min_max_temperatures(cv::Mat image) {
@@ -295,6 +290,7 @@ void FloorHeatMapper::mark_min_max_temperatures(cv::Mat image) {
             }
         }
     }
-    heatpoints_marker_pub_->publish(heatpoints_marker_);
+    RCLCPP_INFO(get_logger(), "Temperatures: max: %f,\t min: %f", hottest_temperature_, coldest_temperature_);
+    heatpoints_marker_pub_->publish(heatpoints_cube_marker_);
 }
 }  // namespace floor_heat_mapper

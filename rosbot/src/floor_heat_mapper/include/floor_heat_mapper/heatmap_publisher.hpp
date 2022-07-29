@@ -59,7 +59,6 @@ class FloorHeatMapper : public rclcpp::Node {
     void sync_heatmap_info_with_map(const nav_msgs::msg::OccupancyGrid map_msg);
     void timer_callback();
     void take_thermal_camera_to_map_transform();
-    void update_markers();
     void create_heatpoints();
     void mark_min_max_temperatures(cv::Mat image);
 
@@ -76,7 +75,7 @@ class FloorHeatMapper : public rclcpp::Node {
     geometry_msgs::msg::TransformStamped thermal_camera_to_map_transform_;
     geometry_msgs::msg::Point* hottest_point_;
     geometry_msgs::msg::Point* coldest_point_;
-    visualization_msgs::msg::Marker heatpoints_marker_;
+    visualization_msgs::msg::Marker heatpoints_cube_marker_;
 
     std::shared_ptr<tf2_ros::TransformListener> transform_listener_{nullptr};
     std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
