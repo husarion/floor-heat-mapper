@@ -14,6 +14,8 @@ find_package(sensor_msgs REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(visualization_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
+
 
 
 # Try for OpenCV 4.X, but settle for whatever is installed
@@ -31,7 +33,7 @@ add_executable(${PROJECT_NAME}
 target_include_directories(${PROJECT_NAME} PUBLIC include/)
 
 ament_target_dependencies(${PROJECT_NAME}
- rclcpp nav_msgs tf2 tf2_ros geometry_msgs tf2_geometry_msgs sensor_msgs OpenCV cv_bridge visualization_msgs)
+ rclcpp nav_msgs tf2 tf2_ros geometry_msgs tf2_geometry_msgs sensor_msgs OpenCV cv_bridge visualization_msgs std_srvs)
 
 install(TARGETS
   ${PROJECT_NAME}

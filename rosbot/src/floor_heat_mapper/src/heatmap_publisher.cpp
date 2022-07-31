@@ -3,24 +3,46 @@
 namespace floor_heat_mapper {
 FloorHeatMapper::FloorHeatMapper()
     : rclcpp::Node(NODE_NAME) {
-    static_tf_pub_ = std::make_shared<tf2_ros::StaticTransformBroadcaster>(this);
-    using namespace std::chrono_literals;
-    using std::placeholders::_1;
-
-    tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
-    transform_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
-
+    handle_parameters();
+    create_pubs_subs_and_timers();
     calculate_heatmap_resolution();
     create_thermal_camera_to_base_link_tf();
     create_heatpoints();
     RCLCPP_INFO(get_logger(), "Configured mapping, wainting for /%s and /%s...", THERMAL_CAMERA_TOPIC_NAME, MAP_TOPIC_NAME);
+}
 
+void FloorHeatMapper::create_pubs_subs_and_timers() {
+    using namespace std::chrono_literals;
+    using std::placeholders::_1;
+
+    static_tf_pub_ = std::make_shared<tf2_ros::StaticTransformBroadcaster>(this);
+    tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
+    transform_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
     heatmap_pub_ = create_publisher<nav_msgs::msg::OccupancyGrid>(HEATMAP_TOPIC_NAME, 10);
     map_sub_ = create_subscription<nav_msgs::msg::OccupancyGrid>(MAP_TOPIC_NAME, 10, std::bind(&FloorHeatMapper::map_callback, this, _1));
     thermal_camera_image_sub_ = create_subscription<sensor_msgs::msg::Image>(THERMAL_CAMERA_TOPIC_NAME, 10, std::bind(&FloorHeatMapper::thermal_camera_callback, this, _1));
     heatpoints_marker_pub_ = create_publisher<visualization_msgs::msg::Marker>(MARKERS_TOPIC_NAME, 10);
-
     timer_ = this->create_wall_timer(100ms, std::bind(&FloorHeatMapper::timer_callback, this));
+
+    if (sync_mode_) {
+        take_thermal_image_srv_ = create_service<std_srvs::srv::Trigger>(TAKE_THERMAL_IMAGE_SERVICE_NAME, FloorHeatMapper::take_thermal_image_callback);
+    }
+}
+
+void FloorHeatMapper::handle_parameters() {
+    declare_parameter<bool>("async", true);
+    declare_parameter<bool>("sync", false);
+
+    auto async_param = get_parameter("async");
+    auto sync_param = get_parameter("sync");
+
+    async_mode_ = async_param.get_value<bool>();
+    sync_mode_ = sync_param.get_value<bool>();
+
+    RCLCPP_INFO(get_logger(), "Set parameters: async: %s\tsync: %s...", async_mode_ ? "true" : "false", sync_mode_ ? "true" : "false");
+    if ((not async_mode_) and (not sync_mode_)) {
+        throw rclcpp::exceptions::InvalidParametersException("[FloorHeatMapper] There is no sync even async mode parameter.");
+    }
 }
 
 void FloorHeatMapper::create_thermal_camera_to_base_link_tf() {
@@ -38,6 +60,10 @@ void FloorHeatMapper::calculate_heatmap_resolution() {
 }
 
 void FloorHeatMapper::timer_callback() {
+    if (async_mode_ or (sync_mode_ | trigger_thermal_photo_)) {
+        merge_single_thermal_image_and_heatmap();
+    }
+
     take_thermal_camera_to_map_transform();
     update_heatmap();
 }
@@ -90,6 +116,10 @@ void FloorHeatMapper::map_callback(const nav_msgs::msg::OccupancyGrid map_msg) {
 }
 
 void FloorHeatMapper::sync_heatmap_info_with_map(const nav_msgs::msg::OccupancyGrid map_msg) {
+    if (heatmap_synced_) {
+        return;
+    }
+
     RCLCPP_INFO(get_logger(), "Sync map info...");
     double real_size_x = map_msg.info.width * map_msg.info.resolution;
     double real_size_y = map_msg.info.height * map_msg.info.resolution;
@@ -116,6 +146,7 @@ void FloorHeatMapper::sync_heatmap_info_with_map(const nav_msgs::msg::OccupancyG
         }
     }
     RCLCPP_INFO(get_logger(), "Heatmap constructed!");
+    heatmap_synced_ = true;
 }
 
 cv::Mat FloorHeatMapper::create_image_from_heatmap() {
@@ -195,7 +226,6 @@ cv::Mat FloorHeatMapper::normalize_and_check_min_max_temperatures(cv::Mat image)
                 coldest_temperature_ = static_cast<double>(pixel) / 100;
             }
 
-
             pixel = (static_cast<double>(pixel) - 150.0) * 80 / 150;
             normalized.at<uint16_t>(i, j) = pixel;
         }
@@ -204,25 +234,19 @@ cv::Mat FloorHeatMapper::normalize_and_check_min_max_temperatures(cv::Mat image)
 }
 
 void FloorHeatMapper::thermal_camera_callback(const sensor_msgs::msg::Image image_msg) {
-    if (heatmap_msg_.info.width == 0 or heatmap_msg_.info.height == 0) {
-        RCLCPP_INFO(get_logger(), "Waiting for /%s topic...", MAP_TOPIC_NAME);
-        return;
+    cv_bridge_with_single_thermal_image_ = cv_bridge::toCvCopy(image_msg, sensor_msgs::image_encodings::MONO16);
+}
+
+bool FloorHeatMapper::merge_single_thermal_image_and_heatmap() {
+    if (not heatmap_synced_) {
+        RCLCPP_INFO(get_logger(), "Waiting for synchronization with /%s topic...", MAP_TOPIC_NAME);
+        return false;
     }
-    if (heatmap_msg_.info.origin.position.x == 0 or heatmap_msg_.info.origin.position.y == 0) {
-        RCLCPP_INFO(get_logger(), "Waiting for /%s topic...", MAP_TOPIC_NAME);
 
-        return;
-    }
-
-    cv_bridge::CvImagePtr cv_ptr;
-    cv_ptr = cv_bridge::toCvCopy(image_msg, sensor_msgs::image_encodings::MONO16);
-
-    auto heatmap_image = create_image_from_heatmap();
-    cv::Mat normalized_image = normalize_and_check_min_max_temperatures(cv_ptr->image);
-
+    auto normalized_image = normalize_and_check_min_max_temperatures(cv_bridge_with_single_thermal_image_->image);
     normalized_image.convertTo(normalized_image, CV_8UC1, 1);
-    auto rotated_single_thermal_image_ = rotate_image(normalized_image);
 
+    auto rotated_single_thermal_image_ = rotate_image(normalized_image);
     auto to_image_center_vector = take_vector_to_image_center(rotated_single_thermal_image_);
 
     double real_position_dx = thermal_camera_to_map_transform_.transform.translation.x - heatmap_msg_.info.origin.position.x;
@@ -235,6 +259,7 @@ void FloorHeatMapper::thermal_camera_callback(const sensor_msgs::msg::Image imag
 
     auto mask = create_mask(rotated_single_thermal_image_);
 
+    auto heatmap_image = create_image_from_heatmap();
     rotated_single_thermal_image_.copyTo(heatmap_image(cv::Rect(image_position_x, image_position_y, rotated_single_thermal_image_.cols, rotated_single_thermal_image_.rows)), heatmap_image(cv::Rect(image_position_x, image_position_y, mask.cols, mask.rows)) == 255);
     mark_min_max_temperatures(heatmap_image);
 
@@ -247,13 +272,14 @@ void FloorHeatMapper::thermal_camera_callback(const sensor_msgs::msg::Image imag
             heatmap_msg_.data[i] = heatmap_image.data[i];
         }
     }
+    return true;
 }
 
 void FloorHeatMapper::create_heatpoints() {
     heatpoints_cube_marker_.header.stamp = now();
     heatpoints_cube_marker_.header.frame_id = MAP_FRAME_NAME;
     heatpoints_cube_marker_.type = visualization_msgs::msg::Marker::POINTS;
-    heatpoints_cube_marker_.action = 1;
+    heatpoints_cube_marker_.action = visualization_msgs::msg::Marker::ADD;
     heatpoints_cube_marker_.scale.x = 0.05;
     heatpoints_cube_marker_.scale.y = 0.05;
     heatpoints_cube_marker_.scale.z = 0.05;
@@ -274,8 +300,8 @@ void FloorHeatMapper::create_heatpoints() {
 }
 
 void FloorHeatMapper::mark_min_max_temperatures(cv::Mat image) {
-    uint8_t max_value = 0;
-    uint8_t min_value = 255;
+    uint8_t max_value = std::numeric_limits<uint8_t>::min();
+    uint8_t min_value = std::numeric_limits<uint8_t>::max();
     for (auto i = 0u; i < image.rows; ++i) {
         for (auto j = 0u; j < image.cols; ++j) {
             auto pixel = image.at<uint8_t>(i, j);
@@ -292,5 +318,13 @@ void FloorHeatMapper::mark_min_max_temperatures(cv::Mat image) {
     }
     RCLCPP_INFO(get_logger(), "Temperatures: max: %f,\t min: %f", hottest_temperature_, coldest_temperature_);
     heatpoints_marker_pub_->publish(heatpoints_cube_marker_);
+}
+
+void FloorHeatMapper::take_thermal_image_callback(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+                                                  std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+    (void)request;
+    trigger_thermal_photo_ = true;
+    response->success = heatmap_synced_;
+    response->message = response->success ? "Successfully took photo." : "Heatmap isn't synced with /map.";
 }
 }  // namespace floor_heat_mapper
