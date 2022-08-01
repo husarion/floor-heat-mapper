@@ -35,7 +35,17 @@ target_include_directories(${PROJECT_NAME} PUBLIC include/)
 ament_target_dependencies(${PROJECT_NAME}
  rclcpp nav_msgs tf2 tf2_ros geometry_msgs tf2_geometry_msgs sensor_msgs OpenCV cv_bridge visualization_msgs std_srvs)
 
-install(TARGETS
+install(
+  DIRECTORY scripts
+  DESTINATION share/${PROJECT_NAME}
+)
+
+install(PROGRAMS
+  scripts/mapping_planner.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+ install(TARGETS
   ${PROJECT_NAME}
   DESTINATION lib/${PROJECT_NAME})
 

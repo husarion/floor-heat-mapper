@@ -5,7 +5,7 @@ SHELL ["/bin/bash", "-c"]
 
 RUN apt-get update && \
     apt-get install -y  ros-$ROS_DISTRO-nav-msgs ros-$ROS_DISTRO-rqt-image-view ros-$ROS_DISTRO-teleop-twist-keyboard \
-    ros-$ROS_DISTRO-rmw-cyclonedds-cpp ros-$ROS_DISTRO-visualization-msgs \
+    ros-$ROS_DISTRO-rmw-cyclonedds-cpp ros-$ROS_DISTRO-visualization-msgs ros-$ROS_DISTRO-nav2-simple-commander \
     libopencv-dev libboost-python-dev \
     && \
     apt-get autoremove -y && \

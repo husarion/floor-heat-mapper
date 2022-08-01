@@ -31,7 +31,8 @@ constexpr const char* NODE_NAME = "FloorHeatMapper";
 constexpr char HEATMAP_TOPIC_NAME[] = "floor_heatmap";
 constexpr char MAP_TOPIC_NAME[] = "map";
 constexpr char THERMAL_CAMERA_TOPIC_NAME[] = "thermal_camera";
-constexpr char MARKERS_TOPIC_NAME[] = "heatpoints";
+constexpr char HEATPOINTS_TOPIC_NAME[] = "heatpoints";
+constexpr char GOAL_POSES_TOPIC_NAME[] = "goal_pose_markers";
 constexpr const char* TAKE_THERMAL_IMAGE_SERVICE_NAME = "take_thermal_image";
 
 constexpr char MAP_FRAME_NAME[] = "map";
@@ -53,6 +54,8 @@ constexpr double MIN_FLOOR_NORMALIZED_TEMPERATURE = 15.0;
 constexpr double THERMAL_IMAGE_TEMPERATURE_SCALE = 0.1;
 constexpr double COLOR_OCCUPACY_MAP_SCALE = 192.0;
 
+constexpr double MEASUREMENT_STEP = 1.0;
+
 class FloorHeatMapper : public rclcpp::Node {
    public:
     FloorHeatMapper();
@@ -69,6 +72,7 @@ class FloorHeatMapper : public rclcpp::Node {
     void timer_callback();
     void take_thermal_camera_to_map_transform();
     void create_heatpoints();
+    void create_goal_poses_markers();
     void mark_min_max_temperatures(cv::Mat image);
     void handle_parameters();
     bool merge_single_thermal_image_and_heatmap();
@@ -94,7 +98,9 @@ class FloorHeatMapper : public rclcpp::Node {
     geometry_msgs::msg::TransformStamped thermal_camera_to_map_transform_;
     geometry_msgs::msg::Point* hottest_point_;
     geometry_msgs::msg::Point* coldest_point_;
-    visualization_msgs::msg::Marker heatpoints_cube_marker_;
+    visualization_msgs::msg::Marker heatpoints_marker_;
+    visualization_msgs::msg::Marker goal_poses_marker_;
+
     cv_bridge::CvImagePtr cv_bridge_with_single_thermal_image_;
 
     std::shared_ptr<tf2_ros::TransformListener> transform_listener_{nullptr};
@@ -103,6 +109,7 @@ class FloorHeatMapper : public rclcpp::Node {
 
     rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr heatmap_pub_;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr heatpoints_marker_pub_;
+    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr goal_poses_marker_pub_;
 
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr thermal_camera_image_sub_;
