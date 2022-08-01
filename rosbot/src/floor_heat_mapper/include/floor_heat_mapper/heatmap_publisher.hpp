@@ -82,6 +82,7 @@ class FloorHeatMapper : public rclcpp::Node {
     bool async_mode_ = true;
     inline static bool heatmap_synced_ = false;
     inline static bool trigger_thermal_photo_ = false;
+    inline static bool thermal_image_synced_ = false;
 
     rclcpp::TimerBase::SharedPtr timer_;
     nav_msgs::msg::OccupancyGrid heatmap_msg_;
