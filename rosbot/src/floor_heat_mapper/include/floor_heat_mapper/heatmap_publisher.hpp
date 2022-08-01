@@ -48,6 +48,11 @@ constexpr float THERMAL_CAMERA_FRAME_Z = 0.178;
 constexpr uint8_t IMAGE_WIDTH = 16;
 constexpr uint8_t IMAGE_HEIGHT = 12;
 
+constexpr double MAX_FLOOR_NORMALIZED_TEMPERATURE = 30.0;
+constexpr double MIN_FLOOR_NORMALIZED_TEMPERATURE = 15.0;
+constexpr double THERMAL_IMAGE_TEMPERATURE_SCALE = 0.1;
+constexpr double COLOR_OCCUPACY_MAP_SCALE = 192.0;
+
 class FloorHeatMapper : public rclcpp::Node {
    public:
     FloorHeatMapper();

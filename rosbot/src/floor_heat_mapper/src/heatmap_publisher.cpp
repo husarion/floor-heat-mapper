@@ -221,22 +221,28 @@ cv::Mat FloorHeatMapper::normalize_and_check_min_max_temperatures(cv::Mat image)
 
     for (auto i = 0u; i < normalized.rows; ++i) {
         for (auto j = 0u; j < normalized.cols; ++j) {
-            auto pixel = normalized.at<uint16_t>(i, j);
-            if (hottest_temperature_ * 100 < pixel) {
-                hottest_temperature_ = static_cast<double>(pixel) / 100;
-            } else if (coldest_temperature_ * 100 > pixel) {
-                coldest_temperature_ = static_cast<double>(pixel) / 100;
-            }
+            auto pixel = static_cast<double>(normalized.at<uint16_t>(i, j)) * THERMAL_IMAGE_TEMPERATURE_SCALE;
 
-            pixel = (static_cast<double>(pixel) - 150.0) * 80 / 150;
-            normalized.at<uint16_t>(i, j) = pixel;
+            hottest_temperature_ = hottest_temperature_ < pixel ? pixel : hottest_temperature_;
+            coldest_temperature_ = coldest_temperature_ > pixel ? pixel : coldest_temperature_;
+
+            auto x = pixel;
+            pixel = pixel > MAX_FLOOR_NORMALIZED_TEMPERATURE ? MAX_FLOOR_NORMALIZED_TEMPERATURE : pixel;
+            pixel = pixel < MIN_FLOOR_NORMALIZED_TEMPERATURE ? MIN_FLOOR_NORMALIZED_TEMPERATURE : pixel;
+            pixel -= MIN_FLOOR_NORMALIZED_TEMPERATURE - 1.0;
+            pixel /= MAX_FLOOR_NORMALIZED_TEMPERATURE - MIN_FLOOR_NORMALIZED_TEMPERATURE + 1.0;
+            pixel *= COLOR_OCCUPACY_MAP_SCALE;
+
+            normalized.at<uint16_t>(i, j) = static_cast<uint16_t>(pixel);
+            if (hottest_temperature_ == x) {
+                RCLCPP_INFO(get_logger(), "Temperatures:\tmax: %f,\t min: %f", hottest_temperature_, coldest_temperature_);
+            }
         }
     }
     return normalized;
 }
 
 void FloorHeatMapper::thermal_camera_callback(const sensor_msgs::msg::Image image_msg) {
-    RCLCPP_INFO(get_logger(), "Got thermal image...");
     cv_bridge_with_single_thermal_image_ = cv_bridge::toCvCopy(image_msg, sensor_msgs::image_encodings::MONO16);
     thermal_image_synced_ = true;
 }
@@ -269,7 +275,6 @@ bool FloorHeatMapper::merge_single_thermal_image_and_heatmap() {
 
     auto heatmap_image = create_image_from_heatmap();
     rotated_single_thermal_image_.copyTo(heatmap_image(cv::Rect(image_position_x, image_position_y, rotated_single_thermal_image_.cols, rotated_single_thermal_image_.rows)), heatmap_image(cv::Rect(image_position_x, image_position_y, mask.cols, mask.rows)) == 255);
-    mark_min_max_temperatures(heatmap_image);
 
     for (auto i = 0u; i < heatmap_msg_.info.height * heatmap_msg_.info.width; ++i) {
         if (heatmap_image.data[i] == 255) {
@@ -280,6 +285,7 @@ bool FloorHeatMapper::merge_single_thermal_image_and_heatmap() {
             heatmap_msg_.data[i] = heatmap_image.data[i];
         }
     }
+    mark_min_max_temperatures(heatmap_image);
     return true;
 }
 
@@ -317,14 +323,13 @@ void FloorHeatMapper::mark_min_max_temperatures(cv::Mat image) {
                 min_value = pixel;
                 coldest_point_->x = static_cast<double>(j) * heatmap_msg_.info.resolution + heatmap_msg_.info.origin.position.x;
                 coldest_point_->y = static_cast<double>(i) * heatmap_msg_.info.resolution + heatmap_msg_.info.origin.position.y;
-            } else if (pixel > max_value and pixel != 255) {
+            } else if (pixel > max_value and pixel != 255 and pixel < 100) {
                 max_value = pixel;
                 hottest_point_->x = static_cast<double>(j) * heatmap_msg_.info.resolution + heatmap_msg_.info.origin.position.x;
                 hottest_point_->y = static_cast<double>(i) * heatmap_msg_.info.resolution + heatmap_msg_.info.origin.position.y;
             }
         }
     }
-    RCLCPP_INFO(get_logger(), "Temperatures: max: %f,\t min: %f", hottest_temperature_, coldest_temperature_);
     heatpoints_marker_pub_->publish(heatpoints_cube_marker_);
 }
 
