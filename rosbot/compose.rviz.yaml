@@ -20,3 +20,7 @@ services:
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ./config/rosbot_pro_mapping.rviz:/root/.rviz2/default.rviz
+
+  heatmapping_planner:
+    build: .
+    command: ros2 run floor_heat_mapper mapping_planner.py

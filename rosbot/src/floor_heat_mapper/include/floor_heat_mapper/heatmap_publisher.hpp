@@ -54,7 +54,8 @@ constexpr double MIN_FLOOR_NORMALIZED_TEMPERATURE = 15.0;
 constexpr double THERMAL_IMAGE_TEMPERATURE_SCALE = 0.1;
 constexpr double COLOR_OCCUPACY_MAP_SCALE = 192.0;
 
-constexpr double MEASUREMENT_STEP = 1.0;
+constexpr double MEASUREMENT_STEP_X = 0.5;
+constexpr double MEASUREMENT_STEP_Y = 0.5;
 
 class FloorHeatMapper : public rclcpp::Node {
    public:
@@ -72,7 +73,7 @@ class FloorHeatMapper : public rclcpp::Node {
     void timer_callback();
     void take_thermal_camera_to_map_transform();
     void create_heatpoints();
-    void create_goal_poses_markers();
+    void create_goal_poses_markers(const nav_msgs::msg::OccupancyGrid map_msg);
     void mark_min_max_temperatures(cv::Mat image);
     void handle_parameters();
     bool merge_single_thermal_image_and_heatmap();
