@@ -16,12 +16,10 @@ services:
 
   map-publisher:
     build: .
-    command: ros2 run floor_heat_mapper floor_heat_mapper --ros-args -p sync:=true -p async:=false
+    command: ros2 run floor_heat_mapper floor_heat_mapper # --ros-args -p sync:=true -p async:=false
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
-    environment:
-      - DISPLAY
-      - LIBGL_ALWAYS_SOFTWARE=1
+      - ./config/rosbot_pro_mapping.rviz:/root/.rviz2/default.rviz
 
   heatmapping_planner:
     build: .
