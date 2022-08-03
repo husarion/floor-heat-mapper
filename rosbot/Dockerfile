@@ -1,12 +1,14 @@
-ARG ROS_DISTRO=humble
+ARG ROS_DISTRO=rolling
 FROM ros:$ROS_DISTRO
 
 SHELL ["/bin/bash", "-c"]
 
 RUN apt-get update && \
     apt-get install -y  ros-$ROS_DISTRO-nav-msgs ros-$ROS_DISTRO-rqt-image-view ros-$ROS_DISTRO-teleop-twist-keyboard \
-    ros-$ROS_DISTRO-rmw-cyclonedds-cpp ros-$ROS_DISTRO-visualization-msgs ros-$ROS_DISTRO-nav2-simple-commander \
+    ros-$ROS_DISTRO-rmw-cyclonedds-cpp ros-$ROS_DISTRO-visualization-msgs \
     libopencv-dev libboost-python-dev \
+    # humble
+    # ros-$ROS_DISTRO-nav2-simple-commander \
     && \
     apt-get autoremove -y && \
     apt-get clean && \

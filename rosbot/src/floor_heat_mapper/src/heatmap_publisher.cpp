@@ -22,8 +22,17 @@ void FloorHeatMapper::create_pubs_subs_and_timers() {
     map_sub_ = create_subscription<nav_msgs::msg::OccupancyGrid>(MAP_TOPIC_NAME, 10, std::bind(&FloorHeatMapper::map_callback, this, _1));
     thermal_camera_image_sub_ = create_subscription<sensor_msgs::msg::Image>(THERMAL_CAMERA_TOPIC_NAME, 10, std::bind(&FloorHeatMapper::thermal_camera_callback, this, _1));
     heatpoints_marker_pub_ = create_publisher<visualization_msgs::msg::Marker>(HEATPOINTS_TOPIC_NAME, 10);
-    goal_poses_marker_pub_ = create_publisher<visualization_msgs::msg::Marker>(GOAL_POSES_TOPIC_NAME, 10);
 
+    heatpoints_min_value_marker_.header.stamp = now();
+    heatpoints_min_value_marker_.header.frame_id = MAP_FRAME_NAME;
+    heatpoints_min_value_marker_.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+    heatpoints_min_value_marker_.action = visualization_msgs::msg::Marker::ADD;
+    heatpoints_min_value_marker_.scale.z = 1.0;
+    heatpoints_min_value_marker_.pose.position.z = 0.2;
+    heatpoints_min_value_marker_.ns = "values";
+    heatpoints_min_value_marker_.color.a = 1.0;
+    heatpoints_min_value_marker_.text = "should see text";
+    heatpoints_min_value_marker_.mesh_resource = "should see text mesh";
     timer_ = this->create_wall_timer(100ms, std::bind(&FloorHeatMapper::timer_callback, this));
 
     if (sync_mode_) {
@@ -67,6 +76,8 @@ void FloorHeatMapper::timer_callback() {
     if (async_mode_ or (sync_mode_ and trigger_thermal_photo_)) {
         merge_single_thermal_image_and_heatmap();
         trigger_thermal_photo_ = false;
+        RCLCPP_INFO(get_logger(), "Publish!");
+        heatpoints_marker_pub_->publish(heatpoints_min_value_marker_);
     }
 
     update_heatmap();
@@ -221,8 +232,8 @@ cv::Mat FloorHeatMapper::create_mask(cv::Mat image) {
 cv::Mat FloorHeatMapper::normalize_and_check_min_max_temperatures(cv::Mat image) {
     cv::Mat normalized = image.clone();
 
-    for (auto i = 0u; i < normalized.rows; ++i) {
-        for (auto j = 0u; j < normalized.cols; ++j) {
+    for (auto i = 0; i < normalized.rows; ++i) {
+        for (auto j = 0; j < normalized.cols; ++j) {
             auto pixel = static_cast<double>(normalized.at<uint16_t>(i, j)) * THERMAL_IMAGE_TEMPERATURE_SCALE;
 
             hottest_temperature_ = hottest_temperature_ < pixel ? pixel : hottest_temperature_;
@@ -319,13 +330,16 @@ void FloorHeatMapper::create_heatpoints() {
 
     hottest_point_ = &heatpoints_marker_.points[0];
     coldest_point_ = &heatpoints_marker_.points[1];
+    auto temp_string = std::string("25.0*C");
+
+
 }
 
 void FloorHeatMapper::mark_min_max_temperatures(cv::Mat image) {
     uint8_t max_value = std::numeric_limits<uint8_t>::min();
     uint8_t min_value = std::numeric_limits<uint8_t>::max();
-    for (auto i = 0u; i < image.rows; ++i) {
-        for (auto j = 0u; j < image.cols; ++j) {
+    for (auto i = 0; i < image.rows; ++i) {
+        for (auto j = 0; j < image.cols; ++j) {
             auto pixel = image.at<uint8_t>(i, j);
             if (pixel < min_value and pixel != 0) {
                 min_value = pixel;
@@ -338,7 +352,8 @@ void FloorHeatMapper::mark_min_max_temperatures(cv::Mat image) {
             }
         }
     }
-    heatpoints_marker_pub_->publish(heatpoints_marker_);
+    // heatpoints_marker_pub_->publish(heatpoints_marker_);
+    // heatpoints_marker_pub_->publish(heatpoints_min_value_marker_);
 }
 
 void FloorHeatMapper::take_thermal_image_callback(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,

@@ -99,7 +99,7 @@ class FloorHeatMapper : public rclcpp::Node {
     geometry_msgs::msg::Point* hottest_point_;
     geometry_msgs::msg::Point* coldest_point_;
     visualization_msgs::msg::Marker heatpoints_marker_;
-    visualization_msgs::msg::Marker goal_poses_marker_;
+    visualization_msgs::msg::Marker heatpoints_min_value_marker_;
 
     cv_bridge::CvImagePtr cv_bridge_with_single_thermal_image_;
 
@@ -109,7 +109,7 @@ class FloorHeatMapper : public rclcpp::Node {
 
     rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr heatmap_pub_;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr heatpoints_marker_pub_;
-    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr goal_poses_marker_pub_;
+    // rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr heatpoints_value_marker_pub_;
 
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr thermal_camera_image_sub_;
