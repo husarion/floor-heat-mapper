@@ -117,7 +117,6 @@ geometry_msgs::msg::Vector3 FloorHeatMapper::take_vector_to_image_center(const c
 
 void FloorHeatMapper::map_callback(const nav_msgs::msg::OccupancyGrid map_msg) {
     sync_heatmap_info_with_map(map_msg);
-    create_goal_poses_markers(map_msg);
 }
 
 void FloorHeatMapper::sync_heatmap_info_with_map(const nav_msgs::msg::OccupancyGrid map_msg) {
@@ -314,48 +313,6 @@ void FloorHeatMapper::create_heatpoints() {
 
     hottest_point_ = &heatpoints_marker_.points[0];
     coldest_point_ = &heatpoints_marker_.points[1];
-}
-
-void FloorHeatMapper::create_goal_poses_markers(const nav_msgs::msg::OccupancyGrid map_msg) {
-    goal_poses_marker_.header.stamp = now();
-    goal_poses_marker_.header.frame_id = MAP_FRAME_NAME;
-    goal_poses_marker_.type = visualization_msgs::msg::Marker::POINTS;
-    goal_poses_marker_.action = visualization_msgs::msg::Marker::ADD;
-    goal_poses_marker_.scale.x = 0.05;
-    goal_poses_marker_.scale.y = 0.05;
-    goal_poses_marker_.scale.z = 0.05;
-    goal_poses_marker_.pose.position.z = 0.2;
-    goal_poses_marker_.ns = "goal_poses";
-    goal_poses_marker_.color.a = 1.0;
-    goal_poses_marker_.color.b = 1.0;
-    goal_poses_marker_.color.g = 1.0;
-    goal_poses_marker_.frame_locked = true;
-
-    auto origin_x = map_msg.info.origin.position.x;
-    auto origin_y = map_msg.info.origin.position.y;
-    auto corner_x = origin_x + map_msg.info.width * map_msg.info.resolution;
-    auto corner_y = origin_y + map_msg.info.height * map_msg.info.resolution;
-
-    for (auto i = origin_y; i < corner_y; i += MEASUREMENT_STEP_Y) {
-        for (auto j = origin_x; j < corner_x; j += MEASUREMENT_STEP_X) {
-            auto index_x = static_cast<int>((j - origin_x) / map_msg.info.resolution);
-            auto index_y = static_cast<int>((i - origin_y) / map_msg.info.resolution);
-            if (map_msg.data[index_x + index_y * map_msg.info.width] != 0) {
-                continue;
-            }
-            geometry_msgs::msg::Point point;
-            std_msgs::msg::ColorRGBA color;
-            color.a = 1.0;
-            color.b = 1.0;
-            color.g = 1.0;
-            point.x = j;
-            point.y = i;
-            goal_poses_marker_.points.push_back(point);
-            goal_poses_marker_.colors.push_back(color);
-        }
-    }
-    goal_poses_marker_pub_->publish(goal_poses_marker_);
-    RCLCPP_INFO(get_logger(), "Created goal poses.");
 }
 
 void FloorHeatMapper::mark_min_max_temperatures(cv::Mat image) {

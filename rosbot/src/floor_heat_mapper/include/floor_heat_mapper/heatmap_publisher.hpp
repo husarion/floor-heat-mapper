@@ -73,7 +73,6 @@ class FloorHeatMapper : public rclcpp::Node {
     void timer_callback();
     void take_thermal_camera_to_map_transform();
     void create_heatpoints();
-    void create_goal_poses_markers(const nav_msgs::msg::OccupancyGrid map_msg);
     void mark_min_max_temperatures(cv::Mat image);
     void handle_parameters();
     bool merge_single_thermal_image_and_heatmap();
