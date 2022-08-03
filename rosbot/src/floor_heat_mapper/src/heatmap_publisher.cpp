@@ -260,7 +260,13 @@ bool FloorHeatMapper::merge_single_thermal_image_and_heatmap() {
     }
 
     auto normalized_image = normalize_and_check_min_max_temperatures(cv_bridge_with_single_thermal_image_->image);
-    normalized_image.convertTo(normalized_image, CV_8UC1, 1);
+
+    try {
+        normalized_image.convertTo(normalized_image, CV_8UC1, 1);
+    } catch (cv_bridge::Exception& e) {
+        RCLCPP_ERROR(get_logger(), "cv_bridge exception: %s", e.what());
+        return false;
+    }
 
     auto rotated_single_thermal_image_ = rotate_image(normalized_image);
     auto to_image_center_vector = take_vector_to_image_center(rotated_single_thermal_image_);
