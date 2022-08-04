@@ -5,7 +5,7 @@
 services:
 
   rviz:
-    image: husarion/rviz2:galactic
+    image: husarion/rviz2:humble
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ./config/rosbot_pro_mapping.rviz:/root/.rviz2/default.rviz

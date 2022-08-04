@@ -78,6 +78,8 @@ class FloorHeatMapper : public rclcpp::Node {
     bool merge_single_thermal_image_and_heatmap();
     static void take_thermal_image_callback(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
                                      std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+    void set_heatpoints_markers_values();
+    void find_min_max_temperatures(const cv::Mat &image);
 
     cv::Mat create_image_from_heatmap();
     cv::Mat rotate_image(cv::Mat image);
@@ -98,8 +100,8 @@ class FloorHeatMapper : public rclcpp::Node {
     geometry_msgs::msg::TransformStamped thermal_camera_to_map_transform_;
     geometry_msgs::msg::Point* hottest_point_;
     geometry_msgs::msg::Point* coldest_point_;
-    visualization_msgs::msg::Marker heatpoints_marker_;
-    visualization_msgs::msg::Marker goal_poses_marker_;
+
+    visualization_msgs::msg::MarkerArray heatpoints_marker_array_;
 
     cv_bridge::CvImagePtr cv_bridge_with_single_thermal_image_;
 
@@ -108,8 +110,7 @@ class FloorHeatMapper : public rclcpp::Node {
     std::shared_ptr<tf2_ros::StaticTransformBroadcaster> static_tf_pub_;
 
     rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr heatmap_pub_;
-    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr heatpoints_marker_pub_;
-    rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr goal_poses_marker_pub_;
+    rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr heatpoints_marker_array_pub_;
 
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
     rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr thermal_camera_image_sub_;

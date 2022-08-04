@@ -21,8 +21,7 @@ void FloorHeatMapper::create_pubs_subs_and_timers() {
     heatmap_pub_ = create_publisher<nav_msgs::msg::OccupancyGrid>(HEATMAP_TOPIC_NAME, 10);
     map_sub_ = create_subscription<nav_msgs::msg::OccupancyGrid>(MAP_TOPIC_NAME, 10, std::bind(&FloorHeatMapper::map_callback, this, _1));
     thermal_camera_image_sub_ = create_subscription<sensor_msgs::msg::Image>(THERMAL_CAMERA_TOPIC_NAME, 10, std::bind(&FloorHeatMapper::thermal_camera_callback, this, _1));
-    heatpoints_marker_pub_ = create_publisher<visualization_msgs::msg::Marker>(HEATPOINTS_TOPIC_NAME, 10);
-    goal_poses_marker_pub_ = create_publisher<visualization_msgs::msg::Marker>(GOAL_POSES_TOPIC_NAME, 10);
+    heatpoints_marker_array_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>(HEATPOINTS_TOPIC_NAME, 10);
 
     timer_ = this->create_wall_timer(100ms, std::bind(&FloorHeatMapper::timer_callback, this));
 
@@ -221,24 +220,17 @@ cv::Mat FloorHeatMapper::create_mask(cv::Mat image) {
 cv::Mat FloorHeatMapper::normalize_and_check_min_max_temperatures(cv::Mat image) {
     cv::Mat normalized = image.clone();
 
-    for (auto i = 0u; i < normalized.rows; ++i) {
-        for (auto j = 0u; j < normalized.cols; ++j) {
+    for (auto i = 0; i < normalized.rows; ++i) {
+        for (auto j = 0; j < normalized.cols; ++j) {
             auto pixel = static_cast<double>(normalized.at<uint16_t>(i, j)) * THERMAL_IMAGE_TEMPERATURE_SCALE;
-
             hottest_temperature_ = hottest_temperature_ < pixel ? pixel : hottest_temperature_;
             coldest_temperature_ = coldest_temperature_ > pixel ? pixel : coldest_temperature_;
-
-            auto x = pixel;
             pixel = pixel > MAX_FLOOR_NORMALIZED_TEMPERATURE ? MAX_FLOOR_NORMALIZED_TEMPERATURE : pixel;
             pixel = pixel < MIN_FLOOR_NORMALIZED_TEMPERATURE ? MIN_FLOOR_NORMALIZED_TEMPERATURE : pixel;
             pixel -= MIN_FLOOR_NORMALIZED_TEMPERATURE - 1.0;
             pixel /= MAX_FLOOR_NORMALIZED_TEMPERATURE - MIN_FLOOR_NORMALIZED_TEMPERATURE + 1.0;
             pixel *= COLOR_OCCUPACY_MAP_SCALE;
-
             normalized.at<uint16_t>(i, j) = static_cast<uint16_t>(pixel);
-            if (hottest_temperature_ == x) {
-                RCLCPP_INFO(get_logger(), "Temperatures:\tmax: %f,\t min: %f", hottest_temperature_, coldest_temperature_);
-            }
         }
     }
     return normalized;
@@ -298,34 +290,72 @@ bool FloorHeatMapper::merge_single_thermal_image_and_heatmap() {
 }
 
 void FloorHeatMapper::create_heatpoints() {
-    heatpoints_marker_.header.stamp = now();
-    heatpoints_marker_.header.frame_id = MAP_FRAME_NAME;
-    heatpoints_marker_.type = visualization_msgs::msg::Marker::POINTS;
-    heatpoints_marker_.action = visualization_msgs::msg::Marker::ADD;
-    heatpoints_marker_.scale.x = 0.1;
-    heatpoints_marker_.scale.y = 0.1;
-    heatpoints_marker_.scale.z = 0.1;
-    heatpoints_marker_.pose.position.z = 0.2;
-    heatpoints_marker_.ns = "points";
-    heatpoints_marker_.color.a = 1.0;
+    visualization_msgs::msg::Marker heatpoints_marker;
+    heatpoints_marker.header.stamp = now();
+    heatpoints_marker.header.frame_id = MAP_FRAME_NAME;
+    heatpoints_marker.type = visualization_msgs::msg::Marker::POINTS;
+    heatpoints_marker.action = visualization_msgs::msg::Marker::ADD;
+    heatpoints_marker.id = 0;
+    heatpoints_marker.scale.x = 0.1;
+    heatpoints_marker.scale.y = 0.1;
+    heatpoints_marker.scale.z = 0.1;
+    heatpoints_marker.pose.position.z = 0.2;
+    heatpoints_marker.ns = "points";
+    heatpoints_marker.color.a = 1.0;
 
-    heatpoints_marker_.frame_locked = true;
-    heatpoints_marker_.points.resize(2);
-    heatpoints_marker_.colors.resize(2);
-    heatpoints_marker_.colors[0].a = 1.0;
-    heatpoints_marker_.colors[0].r = 0.8;
-    heatpoints_marker_.colors[1].a = 1.0;
-    heatpoints_marker_.colors[1].b = 1.0;
+    heatpoints_marker.frame_locked = true;
+    heatpoints_marker.points.resize(2);
+    heatpoints_marker.colors.resize(2);
+    heatpoints_marker.colors[0].a = 1.0;
+    heatpoints_marker.colors[0].r = 0.8;
+    heatpoints_marker.colors[1].a = 1.0;
+    heatpoints_marker.colors[1].b = 1.0;
+    heatpoints_marker.colors[1].r = 0.2;
+    heatpoints_marker.colors[1].g = 0.2;
 
-    hottest_point_ = &heatpoints_marker_.points[0];
-    coldest_point_ = &heatpoints_marker_.points[1];
+    heatpoints_marker_array_.markers.push_back(heatpoints_marker);
+    hottest_point_ = &heatpoints_marker_array_.markers[0].points[0];
+    coldest_point_ = &heatpoints_marker_array_.markers[0].points[1];
+
+    visualization_msgs::msg::Marker heatpoints_values;
+    heatpoints_values.header.stamp = now();
+    heatpoints_values.header.frame_id = MAP_FRAME_NAME;
+    heatpoints_values.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
+    heatpoints_values.action = visualization_msgs::msg::Marker::ADD;
+    heatpoints_values.id = 1;
+    heatpoints_values.scale.z = 0.1;
+    heatpoints_values.pose.position.z = 0.3;
+    heatpoints_values.ns = "values";
+    heatpoints_values.color.a = 1.0;
+
+    heatpoints_marker_array_.markers.push_back(heatpoints_values);
+    heatpoints_values.id = 2;
+    heatpoints_marker_array_.markers.push_back(heatpoints_values);
 }
 
-void FloorHeatMapper::mark_min_max_temperatures(cv::Mat image) {
+void FloorHeatMapper::set_heatpoints_markers_values() {
+    auto coldest_str = std::to_string(coldest_temperature_);
+    std::reverse(coldest_str.begin(), coldest_str.end());
+    coldest_str = coldest_str.substr(4);
+    std::reverse(coldest_str.begin(), coldest_str.end());
+    heatpoints_marker_array_.markers[1].text = coldest_str + "*C";
+    heatpoints_marker_array_.markers[1].pose.position.x = coldest_point_->x;
+    heatpoints_marker_array_.markers[1].pose.position.y = coldest_point_->y;
+
+    auto hottest_str = std::to_string(hottest_temperature_);
+    std::reverse(hottest_str.begin(), hottest_str.end());
+    hottest_str = hottest_str.substr(4);
+    std::reverse(hottest_str.begin(), hottest_str.end());
+    heatpoints_marker_array_.markers[2].text = hottest_str + "*C";
+    heatpoints_marker_array_.markers[2].pose.position.x = hottest_point_->x;
+    heatpoints_marker_array_.markers[2].pose.position.y = hottest_point_->y;
+}
+
+void FloorHeatMapper::find_min_max_temperatures(const cv::Mat& image) {
     uint8_t max_value = std::numeric_limits<uint8_t>::min();
     uint8_t min_value = std::numeric_limits<uint8_t>::max();
-    for (auto i = 0u; i < image.rows; ++i) {
-        for (auto j = 0u; j < image.cols; ++j) {
+    for (auto i = 0; i < image.rows; ++i) {
+        for (auto j = 0; j < image.cols; ++j) {
             auto pixel = image.at<uint8_t>(i, j);
             if (pixel < min_value and pixel != 0) {
                 min_value = pixel;
@@ -338,7 +368,12 @@ void FloorHeatMapper::mark_min_max_temperatures(cv::Mat image) {
             }
         }
     }
-    heatpoints_marker_pub_->publish(heatpoints_marker_);
+}
+
+void FloorHeatMapper::mark_min_max_temperatures(cv::Mat image) {
+    find_min_max_temperatures(image);
+    set_heatpoints_markers_values();
+    heatpoints_marker_array_pub_->publish(heatpoints_marker_array_);
 }
 
 void FloorHeatMapper::take_thermal_image_callback(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,

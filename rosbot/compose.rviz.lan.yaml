@@ -4,7 +4,7 @@
 
 services:
 
-  # ROS Galactic
+  # ROS humble
   rviz:
     network_mode: host
     ipc: host
