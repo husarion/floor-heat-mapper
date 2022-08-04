@@ -61,13 +61,13 @@ def get_cyan() -> ColorRGBA():
 
 class HeatmappingPlanner(Node):
     def __init__(self) -> None:
-        super().__init__('HeatmappingPlanner')
+        super().__init__('HeatMappingPlanner')
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.robot_pose = PoseStamped()
         self.navigator = BasicNavigator()
-        self.get_logger().info('Init HeatmappingPlanner...')
+        self.get_logger().info('Init HeatMappingPlanner...')
         self.navigator.waitUntilNav2Active()
         self.visited_indexes = []
         self.goal_poses = []
@@ -216,7 +216,7 @@ class HeatmappingPlanner(Node):
         self.goal_poses_marker.scale.x = 0.05
         self.goal_poses_marker.scale.y = 0.05
         self.goal_poses_marker.scale.z = 0.05
-        self.goal_poses_marker.pose.position.z = 0.2
+        self.goal_poses_marker.pose.position.z = 0.1
         self.goal_poses_marker.ns = 'goal_poses'
         self.goal_poses_marker.color = get_cyan()
 
@@ -247,6 +247,7 @@ def main(args=None):
     rclpy.init(args=args)
     heatmapping_planner = HeatmappingPlanner()
     rclpy.spin(heatmapping_planner)
+    heatmapping_planner.navigator.destroyNode()
     heatmapping_planner.destroy_node()
     rclpy.shutdown()
 

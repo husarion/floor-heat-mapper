@@ -1,4 +1,4 @@
-#include "floor_heat_mapper/heatmap_publisher.hpp"
+#include "floor_heat_mapper/floor_heat_mapper.hpp"
 #include <rclcpp/rclcpp.hpp>
 
 int main(int argc, char* argv[]) {

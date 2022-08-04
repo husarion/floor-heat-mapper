@@ -26,7 +26,7 @@ endif ()
 message(STATUS "Found OpenCV version ${OpenCV_VERSION}")
 
 add_executable(${PROJECT_NAME}
-  src/heatmap_publisher.cpp
+  src/floor_heat_mapper.cpp
   src/main.cpp
  )
 
@@ -36,12 +36,12 @@ ament_target_dependencies(${PROJECT_NAME}
  rclcpp nav_msgs tf2 tf2_ros geometry_msgs tf2_geometry_msgs sensor_msgs OpenCV cv_bridge visualization_msgs std_srvs)
 
 install(
-  DIRECTORY scripts
+  DIRECTORY scripts launch
   DESTINATION share/${PROJECT_NAME}
 )
 
 install(PROGRAMS
-  scripts/mapping_planner.py
+  scripts/heat_mapping_planner.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

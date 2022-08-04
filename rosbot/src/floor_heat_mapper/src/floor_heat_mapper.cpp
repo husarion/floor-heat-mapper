@@ -1,4 +1,4 @@
-#include "floor_heat_mapper/heatmap_publisher.hpp"
+#include "floor_heat_mapper/floor_heat_mapper.hpp"
 
 namespace floor_heat_mapper {
 FloorHeatMapper::FloorHeatMapper()

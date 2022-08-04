@@ -9,4 +9,11 @@ services:
     environment:
       - RMW_IMPLEMENTATION
 
+  floor-heat-mapper:
+    network_mode: host
+    ipc: host
+    environment:
+      - ROS_DOMAIN_ID
+      - RMW_IMPLEMENTATION
+
 
