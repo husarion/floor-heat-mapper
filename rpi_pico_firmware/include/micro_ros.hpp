@@ -15,19 +15,26 @@
 #error This example is only avaliable for Arduino framework with serial transport.
 #endif
 
-#define RCCHECK(fn)                    \
-    {                                  \
-        rcl_ret_t temp_rc = fn;        \
-        if ((temp_rc != RCL_RET_OK)) { \
-            error_loop();              \
-        }                              \
-    }
-#define RCSOFTCHECK(fn)                \
-    {                                  \
-        rcl_ret_t temp_rc = fn;        \
-        if ((temp_rc != RCL_RET_OK)) { \
-        }                              \
-    }
+#define RCCHECK(fn) { rcl_ret_t temp_rc = fn; if((temp_rc != RCL_RET_OK)){return false;}}
+
+#define EXECUTE_EVERY_N_MS(MS, X)          \
+    do {                                   \
+        static volatile int64_t init = -1; \
+        if (init == -1) {                  \
+            init = uxr_millis();           \
+        }                                  \
+        if (uxr_millis() - init > MS) {    \
+            X;                             \
+            init = uxr_millis();           \
+        }                                  \
+    } while (0)
+
+enum states {
+    WAITING_AGENT,
+    AGENT_AVAILABLE,
+    AGENT_CONNECTED,
+    AGENT_DISCONNECTED
+};
 
 constexpr char NODE_NAME[] = "Thermal_Camera";
 constexpr char PUBLISHER_NAME[] = "thermal_camera";
@@ -39,7 +46,7 @@ constexpr uint8_t BUFFER_LENGHT = 10;
 void error_loop();
 void timer_callback(rcl_timer_t* timer, int64_t last_call_time);
 
-void micro_ros_init();
+bool micro_ros_init();
 void micro_ros_deinit();
 void micro_ros_spin();
 
@@ -53,6 +60,8 @@ void timer_init();
 void fill_image_msg_with_thermal_camera();
 void fill_image_msg_constants();
 void mirror_thermal_image();
+void handle_micro_ros_with_reconnection();
 
-float& take_pixel_from(int x, int y);
+float&
+take_pixel_from(int x, int y);
 timespec get_time_stamp();

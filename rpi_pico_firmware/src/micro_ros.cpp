@@ -15,10 +15,11 @@ static uint16_t image_data_ros[IMAGE_HEIGHT * IMAGE_WIDTH] = {0};
 extern void setup();
 extern int main();
 
+static enum states state;
+
 void error_loop() {
     while (true) {
         digitalWrite(LED_PIN, !digitalRead(LED_PIN));
-        delay(100);
         if (rmw_uros_ping_agent(100, 1) == RCL_RET_OK) {
             setup();
             while (true) {
@@ -33,17 +34,17 @@ void timer_callback(rcl_timer_t* timer, int64_t last_call_time) {
     if (timer != NULL) {
         thermal_camera_read_data(image_data_temperature);
         fill_image_msg_with_thermal_camera();
-        RCSOFTCHECK(rcl_publish(&image_pub, &image_msg, NULL));
+        rcl_publish(&image_pub, &image_msg, NULL);
     }
 }
 
-void micro_ros_init() {
-    serial_init();
+bool micro_ros_init() {
     allocator_init();
     node_init();
     publishers_init();
     timer_init();
     fill_image_msg_constants();
+    return true;
 }
 
 void micro_ros_deinit() {
@@ -51,49 +52,45 @@ void micro_ros_deinit() {
     (void)rmw_uros_set_context_entity_destroy_session_timeout(rmw_context, 0);
 
     rcl_publisher_fini(&image_pub, &node);
-    rclc_support_fini(&support);
-    rcl_node_fini(&node);
+    rcl_timer_fini(&timer);
     rclc_executor_fini(&executor);
+    rcl_node_fini(&node);
+    rclc_support_fini(&support);
 }
 
 void micro_ros_spin() {
     delay(100);
-    RCSOFTCHECK(rclc_executor_spin_some(&executor, RCL_MS_TO_NS(100)));
-}
-
-void serial_init() {
-    Serial.begin(115200);
-    set_microros_serial_transports(Serial);
-    delay(2000);
+    rclc_executor_spin_some(&executor, RCL_MS_TO_NS(100));
 }
 
 void allocator_init() {
     allocator = rcl_get_default_allocator();
-    RCCHECK(rclc_support_init(&support, 0, NULL, &allocator));
+    rclc_support_init(&support, 0, NULL, &allocator);
 }
 
 void node_init() {
-    RCCHECK(rclc_node_init_default(&node, NODE_NAME, "", &support));
+    rclc_node_init_default(&node, NODE_NAME, "", &support);
 }
 
 void publishers_init() {
-    RCCHECK(rclc_publisher_init_default(
+    rclc_publisher_init_default(
         &image_pub,
         &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Image),
-        PUBLISHER_NAME));
+        PUBLISHER_NAME);
 }
 
 void timer_init() {
     const unsigned int timer_timeout = 1000;
-    RCCHECK(rclc_timer_init_default(
+    rclc_timer_init_default(
         &timer,
         &support,
         RCL_MS_TO_NS(timer_timeout),
-        timer_callback));
+        timer_callback);
 
-    RCCHECK(rclc_executor_init(&executor, &support.context, 1, &allocator));
-    RCCHECK(rclc_executor_add_timer(&executor, &timer));
+    executor = rclc_executor_get_zero_initialized_executor();
+    rclc_executor_init(&executor, &support.context, 1, &allocator);
+    rclc_executor_add_timer(&executor, &timer);
 }
 
 void fill_image_msg_constants() {
@@ -122,7 +119,7 @@ void fill_image_msg_with_thermal_camera() {
 
 timespec get_time_stamp() {
     struct timespec currnet_timestamp = {0};
-    RCSOFTCHECK(rmw_uros_sync_session(1000));
+    rmw_uros_sync_session(1000);
     if (rmw_uros_epoch_synchronized()) {
         currnet_timestamp.tv_sec = rmw_uros_epoch_millis() / 1000;
         currnet_timestamp.tv_nsec = rmw_uros_epoch_nanos();
@@ -137,5 +134,31 @@ void mirror_thermal_image() {
             image_data_temperature[j + i * IMAGE_WIDTH] = image_data_temperature[j + ((IMAGE_HEIGHT - 1 - i) * IMAGE_WIDTH)];
             image_data_temperature[j + ((IMAGE_HEIGHT - 1 - i) * IMAGE_WIDTH)] = saved_value;
         }
+    }
+}
+
+void handle_micro_ros_with_reconnection(){
+    switch (state) {
+        case WAITING_AGENT:
+            EXECUTE_EVERY_N_MS(2000, state = (RMW_RET_OK == rmw_uros_ping_agent(100, 1)) ? AGENT_AVAILABLE : WAITING_AGENT;);
+            break;
+        case AGENT_AVAILABLE:
+            state = (true == micro_ros_init()) ? AGENT_CONNECTED : WAITING_AGENT;
+            if (state == WAITING_AGENT) {
+                micro_ros_deinit();
+            };
+            break;
+        case AGENT_CONNECTED:
+            EXECUTE_EVERY_N_MS(2000, state = (RMW_RET_OK == rmw_uros_ping_agent(100, 1)) ? AGENT_CONNECTED : AGENT_DISCONNECTED;);
+            if (state == AGENT_CONNECTED) {
+                micro_ros_spin();
+            }
+            break;
+        case AGENT_DISCONNECTED:
+            micro_ros_deinit();
+            state = WAITING_AGENT;
+            break;
+        default:
+            break;
     }
 }
