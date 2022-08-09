@@ -15,6 +15,8 @@ from nav_msgs.msg import OccupancyGrid
 
 GOAL_POSES_TOPIC_NAME = 'goal_pose_markers'
 MAP_TOPIC_NAME = 'map'
+GLOBAL_COSTMAP_TOPIC_NAME = 'global_costmap/costmap'
+
 
 MAP_FRAME_NAME = 'map'
 BASE_LINK_FRAME_NAME = 'base_link'
@@ -75,16 +77,29 @@ class HeatmappingPlanner(Node):
         self.robot_position = Point()
         self.got_robot_pose = False
         self.going_to_pose = False
+        self.got_map = False
+        self.got_global_costmap = False
+        self.created_goal_poses = False
         self.goal_poses_marker = Marker()
+
+        self.map_msg = OccupancyGrid()
+        self.global_costmap_msg = OccupancyGrid()
 
         self.goal_poses_marker_pub = self.create_publisher(
             Marker, GOAL_POSES_TOPIC_NAME, 10)
         self.map_sub = self.create_subscription(
             OccupancyGrid, MAP_TOPIC_NAME, self.__map_callback, 10)
+        self.global_costmap = self.create_subscription(
+            OccupancyGrid, GLOBAL_COSTMAP_TOPIC_NAME, self.__globalcost_map_callback, 10)
         self.timer = self.create_timer(1, self.__timer_callback)
-        self.get_logger().info('Created HeatmappingPlanner! Waiting for /map...')
+        self.get_logger().info('Created HeatmappingPlanner! Waiting for /%s and /%s...'
+                               % (MAP_TOPIC_NAME, GLOBAL_COSTMAP_TOPIC_NAME))
 
     def __timer_callback(self):
+        if self.got_global_costmap and self.got_map and not self.created_goal_poses:
+            self.__create_goal_markers()
+            self.__create_goal_poses()
+            self.created_goal_poses = True
         if not len(self.goal_poses) or self.going_to_pose:
             return
 
@@ -99,7 +114,7 @@ class HeatmappingPlanner(Node):
         self.goal_poses = []
         for goal_point in self.goal_poses_marker.points:
             goal_pose = PoseStamped()
-            goal_pose.header.frame_id = 'map'
+            goal_pose.header.frame_id = MAP_FRAME_NAME
             goal_pose.header.stamp = self.navigator.get_clock().now().to_msg()
             goal_pose.pose.position.x = goal_point.x
             goal_pose.pose.position.y = goal_point.y
@@ -158,14 +173,16 @@ class HeatmappingPlanner(Node):
             self.get_logger().info('Goal succeeded!')
 
         elif result == TaskResult.CANCELED:
-            self.goal_poses_marker.colors[self.closest_pose_index] = get_black()
+            self.goal_poses_marker.colors[self.closest_pose_index] = get_black(
+            )
             self.goal_poses_marker_pub.publish(self.goal_poses_marker)
             self.visited_indexes.append(self.closest_pose_index)
             self.going_to_pose = False
             self.get_logger().info('Goal was canceled!')
 
         elif result == TaskResult.FAILED:
-            self.goal_poses_marker.colors[self.closest_pose_index] = get_black()
+            self.goal_poses_marker.colors[self.closest_pose_index] = get_black(
+            )
             self.goal_poses_marker_pub.publish(self.goal_poses_marker)
             self.visited_indexes.append(self.closest_pose_index)
             self.going_to_pose = False
@@ -205,10 +222,19 @@ class HeatmappingPlanner(Node):
             return
 
     def __map_callback(self, msg):
-        self.__create_goal_markers(msg)
-        self.__create_goal_poses()
+        if self.got_map:
+            return
+        self.map_msg = msg
+        self.got_map = True
 
-    def __create_goal_markers(self, msg):
+    def __globalcost_map_callback(self, msg):
+        if self.got_global_costmap:
+            return
+        self.global_costmap_msg = msg
+        self.got_global_costmap = True
+
+
+    def __create_goal_markers(self):
         self.goal_poses_marker.header.stamp = self.get_clock().now().to_msg()
         self.goal_poses_marker.header.frame_id = MAP_FRAME_NAME
         self.goal_poses_marker.type = Marker.POINTS
@@ -220,17 +246,17 @@ class HeatmappingPlanner(Node):
         self.goal_poses_marker.ns = 'goal_poses'
         self.goal_poses_marker.color = get_cyan()
 
-        origin_x = msg.info.origin.position.x
-        origin_y = msg.info.origin.position.y
-        corner_x = origin_x + msg.info.width * msg.info.resolution
-        corner_y = origin_y + msg.info.height * msg.info.resolution
+        origin_x = self.map_msg.info.origin.position.x
+        origin_y = self.map_msg.info.origin.position.y
+        corner_x = origin_x + self.map_msg.info.width * self.map_msg.info.resolution
+        corner_y = origin_y + self.map_msg.info.height * self.map_msg.info.resolution
 
         for i in np.arange(origin_y, corner_y, MEASUREMENT_STEP_Y):
             for j in np.arange(origin_x, corner_x, MEASUREMENT_STEP_X):
-                index_x = int((j - origin_x)/msg.info.resolution)
-                index_y = int((i - origin_y)/msg.info.resolution)
-                index = index_x + index_y*msg.info.width
-                if msg.data[index] != 0:
+                index_x = int((j - origin_x)/self.map_msg.info.resolution)
+                index_y = int((i - origin_y)/self.map_msg.info.resolution)
+                index = index_x + index_y*self.map_msg.info.width
+                if self.global_costmap_msg.data[index] > 80 or self.map_msg.data[index] != 0:
                     continue
                 point = Point()
                 point.x = j
