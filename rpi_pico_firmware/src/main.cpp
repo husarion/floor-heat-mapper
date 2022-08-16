@@ -10,7 +10,7 @@ void setup() {
 void loop() {
     handle_micro_ros_with_reconnection();
 
-    if (state == AGENT_CONNECTED) {
+    if (state == AGENT_CONNECTED and millis() % 250 == 0) {
         digitalWrite(LED_PIN, 1);
     } else {
         digitalWrite(LED_PIN, 0);

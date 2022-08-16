@@ -9,10 +9,10 @@ services:
     environment:
       - RMW_IMPLEMENTATION
 
-  floor-heat-mapper:
-    network_mode: host
-    ipc: host
-    environment:
-      - RMW_IMPLEMENTATION
+  # floor-heat-mapper:
+  #   network_mode: host
+  #   ipc: host
+  #   environment:
+  #     - RMW_IMPLEMENTATION
 
 

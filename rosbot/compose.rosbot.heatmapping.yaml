@@ -10,6 +10,6 @@ services:
       - /dev/ttyACM0:/dev/ttyACM0
     command: serial --dev /dev/ttyACM0 # -v6
 
-  floor-heat-mapper:
-    build: .
-    command: ros2 launch floor_heat_mapper  floor_heat_mapper.launch.py sync_auto:=${SYNC_AUTO} async_auto:=${ASYNC_AUTO}
+  # floor-heat-mapper:
+  #   build: .
+  #   command: ros2 launch floor_heat_mapper  floor_heat_mapper.launch.py sync_auto:=${SYNC_AUTO} async_auto:=${ASYNC_AUTO}

@@ -13,3 +13,6 @@ services:
     environment:
       - DISPLAY
       - LIBGL_ALWAYS_SOFTWARE=1
+  floor-heat-mapper:
+    build: .
+    command: ros2 launch floor_heat_mapper  floor_heat_mapper.launch.py sync_auto:=${SYNC_AUTO} async_auto:=${ASYNC_AUTO}

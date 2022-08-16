@@ -12,6 +12,8 @@ void thermal_camera_init() {
     MLX9064x_I2CWrite(THERMAL_CAMERA_I2C_ADDRESS, 0x800D, 0x0901);
 
     thermal_camera_check_eeprom_errors();
+    MLX90641_SetRefreshRate(THERMAL_CAMERA_I2C_ADDRESS, 0x05);
+    Wire.setClock(2*I2C_FREQUENCY);
 }
 
 void thermal_camera_check_eeprom_errors(){

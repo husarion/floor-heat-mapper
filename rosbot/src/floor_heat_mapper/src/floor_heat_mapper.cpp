@@ -57,17 +57,11 @@ void FloorHeatMapper::create_thermal_camera_to_base_link_tf() {
 }
 
 void FloorHeatMapper::calculate_heatmap_resolution() {
-    heatmap_msg_.info.resolution = tan(THERMAL_CAMERA_X_FOV_HALF_ANGLE) * THERMAL_CAMERA_FRAME_Z / 2 / IMAGE_WIDTH;
+    heatmap_msg_.info.resolution = IMAGE_RESOLUTION;
 }
 
 void FloorHeatMapper::timer_callback() {
     take_thermal_camera_to_map_transform();
-
-    if (async_mode_ or (sync_mode_ and trigger_thermal_photo_)) {
-        merge_single_thermal_image_and_heatmap();
-        trigger_thermal_photo_ = false;
-    }
-
     update_heatmap();
 }
 
@@ -239,15 +233,19 @@ cv::Mat FloorHeatMapper::normalize_and_check_min_max_temperatures(cv::Mat image)
 void FloorHeatMapper::thermal_camera_callback(const sensor_msgs::msg::Image image_msg) {
     cv_bridge_with_single_thermal_image_ = cv_bridge::toCvCopy(image_msg, sensor_msgs::image_encodings::MONO16);
     thermal_image_synced_ = true;
+    if (async_mode_ or (sync_mode_ and trigger_thermal_photo_)) {
+        merge_single_thermal_image_and_heatmap();
+        trigger_thermal_photo_ = false;
+    }
 }
 
 bool FloorHeatMapper::merge_single_thermal_image_and_heatmap() {
     if (not heatmap_synced_) {
-        RCLCPP_INFO(get_logger(), "Waiting for synchronization with /%s topic...", MAP_TOPIC_NAME);
+        RCLCPP_INFO_ONCE(get_logger(), "Waiting for synchronization with /%s topic...", MAP_TOPIC_NAME);
         return false;
     }
     if (not thermal_image_synced_) {
-        RCLCPP_INFO(get_logger(), "Waiting for thermal image from /%s topic...", THERMAL_CAMERA_TOPIC_NAME);
+        RCLCPP_INFO_ONCE(get_logger(), "Waiting for thermal image from /%s topic...", THERMAL_CAMERA_TOPIC_NAME);
         return false;
     }
 
@@ -382,5 +380,6 @@ void FloorHeatMapper::take_thermal_image_callback(const std::shared_ptr<std_srvs
     trigger_thermal_photo_ = true;
     response->success = heatmap_synced_ and thermal_image_synced_;
     response->message = response->success ? "Successfully took photo." : "Heatmap isn't synced with /map or /thermal_image.";
+    RCLCPP_INFO(rclcpp::get_logger(NODE_NAME), "Service: %s", response->message.c_str());
 }
 }  // namespace floor_heat_mapper

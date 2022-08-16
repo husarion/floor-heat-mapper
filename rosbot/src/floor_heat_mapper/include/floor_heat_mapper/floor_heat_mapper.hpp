@@ -40,16 +40,14 @@ constexpr char ODOM_FRAME_NAME[] = "odom";
 constexpr char BASE_LINK_FRAME_NAME[] = "base_link";
 constexpr char THERMAL_CAMERA_FRAME_NAME[] = "thermal_camera_frame";
 
-constexpr float THERMAL_CAMERA_X_FOV_HALF_ANGLE = 0.9599310885968813;
-constexpr float THERMAL_CAMERA_Y_FOV_HALF_ANGLE = 0.6544984694978736;
-
-constexpr float THERMAL_CAMERA_FRAME_X = 0.225;
-constexpr float THERMAL_CAMERA_FRAME_Z = 0.178;
+constexpr float THERMAL_CAMERA_FRAME_X = 0.105;
+constexpr float THERMAL_CAMERA_FRAME_Z = 0.07;
+constexpr float IMAGE_RESOLUTION = 0.013125;
 
 constexpr uint8_t IMAGE_WIDTH = 16;
 constexpr uint8_t IMAGE_HEIGHT = 12;
 
-constexpr double MAX_FLOOR_NORMALIZED_TEMPERATURE = 30.0;
+constexpr double MAX_FLOOR_NORMALIZED_TEMPERATURE = 45.0;
 constexpr double MIN_FLOOR_NORMALIZED_TEMPERATURE = 15.0;
 constexpr double THERMAL_IMAGE_TEMPERATURE_SCALE = 0.1;
 constexpr double COLOR_OCCUPACY_MAP_SCALE = 192.0;
